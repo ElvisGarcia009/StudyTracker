@@ -1,0 +1,5 @@
+# Finales de línea LF en el repo (los scripts de shell fallan con CRLF en Linux/macOS)
+* text=auto eol=lf
+*.cmd text eol=crlf
+*.png binary
+*.jpg binary
