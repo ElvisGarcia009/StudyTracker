@@ -41,7 +41,7 @@ No hace falta tener Java, Maven ni Node: todo se compila dentro de Docker.
 
 ```bash
 # 1. Clona el repositorio
-git clone https://github.com/<tu-usuario>/StudyTracker.git
+git clone https://github.com/ElvisGarcia009/StudyTracker.git
 cd StudyTracker
 
 # 2. (Opcional) Crea tu archivo de configuración
