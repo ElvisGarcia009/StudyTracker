@@ -1,11 +1,13 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import AppIcon from '@/components/AppIcon.vue'
 import BaseModal from '@/components/BaseModal.vue'
 import FocusRating from '@/components/FocusRating.vue'
 import SubjectBadge from '@/components/SubjectBadge.vue'
 import { sessionsApi } from '@/api'
 import { useSubjectsStore } from '@/stores/subjects'
 import { useToastStore } from '@/stores/toast'
+import { confirmDialog } from '@/utils/confirm'
 import { formatDate, formatMinutes, formatTime, toDateInput, toDateTimeInput } from '@/utils/format'
 
 const subjects = useSubjectsStore()
@@ -112,7 +114,13 @@ async function save() {
 }
 
 async function remove(session) {
-  if (!confirm('¿Eliminar esta sesión del historial?')) return
+  const ok = await confirmDialog({
+    title: '¿Eliminar esta sesión?',
+    message: `${subjects.byId[session.subjectId]?.name || 'Sesión'}, ${formatMinutes(session.elapsedSeconds / 60)} el ${formatDate(session.startedAt, { day: 'numeric', month: 'long' })}. Se quitará del historial y de tus estadísticas.`,
+    confirmLabel: 'Eliminar sesión',
+    danger: true,
+  })
+  if (!ok) return
   try {
     await sessionsApi.remove(session.id)
     toast.success('Sesión eliminada')
@@ -128,23 +136,27 @@ async function remove(session) {
     <div class="page-header">
       <div>
         <h1>Historial</h1>
-        <p>{{ sessions.length }} sesiones · {{ formatMinutes(totalMinutes) }} en el periodo</p>
+        <p class="num" aria-live="polite">
+          {{ sessions.length }} {{ sessions.length === 1 ? 'sesión' : 'sesiones' }} en el periodo, {{ formatMinutes(totalMinutes) }} en total
+        </p>
       </div>
-      <button class="btn btn-primary" :disabled="!subjects.active.length" @click="open()">＋ Registrar sesión</button>
+      <button class="btn btn-primary" type="button" :disabled="!subjects.active.length" @click="open()">
+        <AppIcon name="plus" :size="14" /> Registrar sesión
+      </button>
     </div>
 
-    <div class="card filters">
+    <div class="filters" role="search" aria-label="Filtrar sesiones">
       <div class="field">
         <label for="f-from">Desde</label>
-        <input id="f-from" v-model="filters.from" type="date" class="input" />
+        <input id="f-from" v-model="filters.from" name="from" type="date" autocomplete="off" class="input num" />
       </div>
       <div class="field">
         <label for="f-to">Hasta</label>
-        <input id="f-to" v-model="filters.to" type="date" class="input" />
+        <input id="f-to" v-model="filters.to" name="to" type="date" autocomplete="off" class="input num" />
       </div>
       <div class="field">
         <label for="f-subject">Materia</label>
-        <select id="f-subject" v-model="filters.subjectId" class="input">
+        <select id="f-subject" v-model="filters.subjectId" name="subject" class="input">
           <option value="">Todas</option>
           <option v-for="s in subjects.subjects" :key="s.id" :value="s.id">{{ s.name }}</option>
         </select>
@@ -152,26 +164,31 @@ async function remove(session) {
     </div>
 
     <div v-if="!loading && !sessions.length" class="card empty">
-      <span class="emoji">🕘</span>
-      No hay sesiones en este periodo.
+      <span class="empty-icon"><AppIcon name="history" :size="18" /></span>
+      <h2>No hay sesiones en este periodo</h2>
+      <p>Amplía las fechas, cambia la materia o registra a mano una sesión que no cronometraste.</p>
     </div>
 
-    <section v-for="g in groups" :key="g.day" class="day-group">
+    <section v-for="g in groups" :key="g.day" class="day-group" :aria-label="formatDate(g.day)">
       <div class="day-title">
         <h2>{{ formatDate(g.day) }}</h2>
-        <span class="tag">{{ formatMinutes(g.minutes) }}</span>
+        <span class="day-total num">{{ formatMinutes(g.minutes) }}</span>
       </div>
       <div class="card session-list">
         <article v-for="s in g.list" :key="s.id" class="session">
           <div class="session-main">
+            <span class="time mono">{{ formatTime(s.startedAt) }}–{{ formatTime(s.endedAt) }}</span>
             <SubjectBadge :subject="subjects.byId[s.subjectId]" />
-            <span class="muted small">{{ formatTime(s.startedAt) }} – {{ formatTime(s.endedAt) }}</span>
-            <span class="duration">{{ formatMinutes(s.elapsedSeconds / 60) }}</span>
-            <span v-if="s.mode === 'POMODORO'" class="tag" :title="`${s.pomodorosCompleted} pomodoros`">🍅 {{ s.pomodorosCompleted }}</span>
+            <span class="duration num">{{ formatMinutes(s.elapsedSeconds / 60) }}</span>
+            <span v-if="s.mode === 'POMODORO'" class="tag num">
+              {{ s.pomodorosCompleted }} {{ s.pomodorosCompleted === 1 ? 'pomodoro' : 'pomodoros' }}
+            </span>
             <FocusRating v-if="s.focusRating" :model-value="s.focusRating" readonly />
             <span class="spacer" />
-            <button class="icon-btn" title="Editar" aria-label="Editar" @click="open(s)">✏️</button>
-            <button class="icon-btn" title="Eliminar" aria-label="Eliminar" @click="remove(s)">🗑️</button>
+            <span class="session-actions">
+              <button class="icon-btn" type="button" title="Editar" aria-label="Editar sesión" @click="open(s)"><AppIcon name="edit" /></button>
+              <button class="icon-btn danger" type="button" title="Eliminar" aria-label="Eliminar sesión" @click="remove(s)"><AppIcon name="trash" /></button>
+            </span>
           </div>
           <p v-if="s.notes" class="notes">{{ s.notes }}</p>
         </article>
@@ -182,46 +199,48 @@ async function remove(session) {
       <form id="session-form" class="form" @submit.prevent="save">
         <div class="field">
           <label for="s-subject">Materia</label>
-          <select id="s-subject" v-model="form.subjectId" class="input" required>
+          <select id="s-subject" v-model="form.subjectId" name="subject" class="input" required>
             <option v-for="s in subjects.subjects" :key="s.id" :value="s.id">{{ s.name }}</option>
           </select>
         </div>
         <div class="field-row">
           <div class="field">
             <label for="s-start">Inicio</label>
-            <input id="s-start" v-model="form.startedAt" type="datetime-local" class="input" required />
+            <input id="s-start" v-model="form.startedAt" name="started-at" type="datetime-local" autocomplete="off" class="input num" required />
           </div>
           <div class="field">
             <label for="s-dur">Duración (min)</label>
-            <input id="s-dur" v-model.number="form.durationMinutes" type="number" min="1" max="1440" class="input" required />
+            <input id="s-dur" v-model.number="form.durationMinutes" name="duration" type="number" inputmode="numeric" autocomplete="off" min="1" max="1440" class="input num" required />
           </div>
         </div>
         <div class="field-row">
           <div class="field">
-            <label>Modo</label>
-            <div class="segmented">
-              <button type="button" :class="{ active: form.mode === 'FREE' }" @click="form.mode = 'FREE'">Libre</button>
-              <button type="button" :class="{ active: form.mode === 'POMODORO' }" @click="form.mode = 'POMODORO'">🍅 Pomodoro</button>
+            <span id="s-mode-label" class="label">Modo</span>
+            <div class="segmented" role="group" aria-labelledby="s-mode-label">
+              <button type="button" :class="{ active: form.mode === 'FREE' }" :aria-pressed="form.mode === 'FREE'" @click="form.mode = 'FREE'">Libre</button>
+              <button type="button" :class="{ active: form.mode === 'POMODORO' }" :aria-pressed="form.mode === 'POMODORO'" @click="form.mode = 'POMODORO'">
+                Pomodoro
+              </button>
             </div>
           </div>
           <div v-if="form.mode === 'POMODORO'" class="field">
             <label for="s-pomo">Pomodoros</label>
-            <input id="s-pomo" v-model.number="form.pomodorosCompleted" type="number" min="0" max="100" class="input" />
+            <input id="s-pomo" v-model.number="form.pomodorosCompleted" name="pomodoros" type="number" inputmode="numeric" autocomplete="off" min="0" max="100" class="input num" />
           </div>
         </div>
         <div class="field">
-          <label>Concentración</label>
+          <span class="label">Concentración</span>
           <FocusRating v-model="form.focusRating" />
         </div>
         <div class="field">
           <label for="s-notes">Notas</label>
-          <textarea id="s-notes" v-model="form.notes" class="input" maxlength="2000" />
+          <textarea id="s-notes" v-model="form.notes" name="notes" class="input" maxlength="2000" placeholder="Qué estudiaste, qué quedó pendiente…" />
         </div>
-        <p v-if="error" class="error-text">{{ error }}</p>
+        <p v-if="error" class="error-text" role="alert">{{ error }}</p>
       </form>
       <template #footer>
         <button class="btn" type="button" @click="editing = false">Cancelar</button>
-        <button class="btn btn-primary" type="submit" form="session-form">Guardar</button>
+        <button class="btn btn-primary" type="submit" form="session-form">Guardar sesión</button>
       </template>
     </BaseModal>
   </div>
@@ -230,24 +249,36 @@ async function remove(session) {
 <style scoped>
 .filters {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 12px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
 }
 
 .day-group {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .day-title {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.day-title h2 {
+  font-size: 0.9375rem;
+}
+
+.day-total {
+  color: var(--text-muted);
+  font-size: 0.8125rem;
 }
 
 .session-list {
-  padding: 4px 16px;
+  padding: 0 8px 0 20px;
 }
 
 .session {
@@ -262,23 +293,56 @@ async function remove(session) {
 .session-main {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px 16px;
   flex-wrap: wrap;
+  min-width: 0;
+}
+
+.session-main :deep(.badge) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.time {
+  min-width: 8.2em;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
 }
 
 .duration {
-  font-weight: 600;
-  font-family: var(--mono);
-  font-size: 0.9rem;
+  font-weight: 500;
 }
 
+.session-actions {
+  display: inline-flex;
+  margin-left: auto;
+}
+
+/* Las notas, citadas debajo de la sesión */
 .notes {
-  margin: 8px 0 0;
-  padding: 8px 12px;
-  background: var(--surface-2);
-  border-radius: 8px;
+  margin-top: 8px;
+  margin-left: calc(8.2em * 0.8125 / 0.875 + 16px);
+  padding-left: 12px;
+  border-left: 2px solid var(--border-strong);
   white-space: pre-wrap;
-  font-size: 0.9rem;
-  color: var(--text-muted);
+  overflow-wrap: anywhere;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  max-width: 72ch;
+}
+
+@media (max-width: 640px) {
+  .session-list {
+    padding: 0 4px 0 14px;
+  }
+
+  .time {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .notes {
+    margin-left: 0;
+  }
 }
 </style>

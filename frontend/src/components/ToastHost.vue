@@ -1,18 +1,27 @@
 <script setup>
+import AppIcon from '@/components/AppIcon.vue'
 import { useToastStore } from '@/stores/toast'
 
 const toast = useToastStore()
+
+// Iconos de línea por tipo (el store trae glifos y emojis; aquí no se usan)
+const ICONS = { success: 'check-circle', error: 'alert', achievement: 'goals', info: 'bell' }
 </script>
 
 <template>
-  <div class="toast-host" aria-live="polite">
+  <div class="toast-host">
     <TransitionGroup name="toast">
-      <div v-for="t in toast.toasts" :key="t.id" class="toast" :class="t.type" @click="toast.dismiss(t.id)">
-        <span class="toast-icon">{{ t.icon }}</span>
-        <div>
+      <div v-for="t in toast.toasts" :key="t.id" class="toast" :class="t.type" :role="t.type === 'error' ? 'alert' : 'status'">
+        <span class="toast-icon">
+          <AppIcon :name="ICONS[t.type] || 'bell'" :size="16" />
+        </span>
+        <div class="toast-text">
           <strong>{{ t.title }}</strong>
           <p v-if="t.message">{{ t.message }}</p>
         </div>
+        <button class="icon-btn close" type="button" aria-label="Cerrar aviso" @click="toast.dismiss(t.id)">
+          <AppIcon name="close" :size="14" />
+        </button>
       </div>
     </TransitionGroup>
   </div>
@@ -22,67 +31,78 @@ const toast = useToastStore()
 .toast-host {
   position: fixed;
   right: 16px;
-  bottom: 16px;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 100;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  z-index: 100;
-  max-width: min(380px, calc(100vw - 32px));
+  gap: 8px;
+  width: min(360px, calc(100vw - 32px));
 }
 
 .toast {
+  --c: var(--text-muted);
   display: flex;
-  gap: 12px;
+  gap: 10px;
   align-items: flex-start;
-  padding: 12px 16px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-left: 4px solid var(--primary);
-  border-radius: 12px;
-  box-shadow: var(--shadow-lg);
-  cursor: pointer;
+  padding: 12px 8px 12px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: inset 0 1px 0 var(--highlight), var(--shadow-pop);
 }
 
 .toast.success {
-  border-left-color: var(--success);
+  --c: var(--success);
 }
 
 .toast.error {
-  border-left-color: var(--danger);
+  --c: var(--danger);
 }
 
 .toast.achievement {
-  border-left-color: var(--warning);
+  --c: var(--primary-text);
 }
 
 .toast-icon {
-  font-size: 1.3rem;
-  line-height: 1.2;
+  display: grid;
+  place-items: center;
+  padding-top: 1px;
+  color: var(--c);
+  flex-shrink: 0;
 }
 
-.toast.success .toast-icon {
-  color: var(--success);
+.toast-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
-.toast.error .toast-icon {
-  color: var(--danger);
-  font-weight: 700;
+.toast-text strong {
+  font-weight: 500;
 }
 
 .toast p {
-  margin: 2px 0 0;
+  margin-top: 2px;
   color: var(--text-muted);
-  font-size: 0.88rem;
+  font-size: 0.8125rem;
+}
+
+.close {
+  width: 26px;
+  height: 26px;
+  margin-top: -3px;
 }
 
 .toast-enter-from,
 .toast-leave-to {
   opacity: 0;
-  transform: translateX(30px);
+  transform: translateY(8px);
 }
 
 .toast-enter-active,
 .toast-leave-active {
-  transition: all 0.25s ease;
+  transition:
+    opacity 0.2s var(--ease),
+    transform 0.2s var(--ease);
 }
 </style>

@@ -1,5 +1,7 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import AppIcon from '@/components/AppIcon.vue'
 import { navItems } from '@/router'
 import { useTimerStore } from '@/stores/timer'
 import { useSubjectsStore } from '@/stores/subjects'
@@ -7,12 +9,15 @@ import { formatClock } from '@/utils/format'
 
 const timer = useTimerStore()
 const subjects = useSubjectsStore()
+const route = useRoute()
 
-const theme = ref(document.documentElement.dataset.theme || 'light')
+const THEME_COLORS = { dark: '#010102', light: '#f4f5f5' }
+const theme = ref(document.documentElement.dataset.theme || 'dark')
 
 function toggleTheme() {
   theme.value = theme.value === 'dark' ? 'light' : 'dark'
   document.documentElement.dataset.theme = theme.value
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', THEME_COLORS[theme.value])
   try {
     localStorage.setItem('st-theme', theme.value)
   } catch {
@@ -22,30 +27,57 @@ function toggleTheme() {
 }
 
 const activeSubject = computed(() => subjects.byId[timer.session?.subjectId])
+const liveLabel = computed(() => (timer.phase === 'break' ? 'Descanso' : activeSubject.value?.name || 'Estudiando'))
+
+// Menú desplegable en pantallas chicas: se cierra al navegar
+const menuOpen = ref(false)
+watch(() => route.fullPath, () => (menuOpen.value = false))
+const currentLabel = computed(() => navItems.find((i) => i.path === route.path)?.label ?? 'Menú')
 </script>
 
 <template>
-  <aside class="sidebar">
-    <div class="brand">
-      <img src="/favicon.svg" alt="" width="30" height="30" />
-      <span>StudyTracker</span>
+  <aside class="sidebar" :class="{ open: menuOpen }" @keydown.esc="menuOpen = false">
+    <div class="top">
+      <RouterLink to="/" class="brand" aria-label="StudyTracker, ir al dashboard">
+        <img src="/favicon.svg" alt="" width="22" height="22" />
+        <span translate="no">StudyTracker</span>
+      </RouterLink>
+      <button
+        class="icon-btn menu-btn"
+        type="button"
+        :aria-expanded="menuOpen"
+        aria-controls="main-nav"
+        :aria-label="menuOpen ? 'Cerrar menú' : `Abrir menú (${currentLabel})`"
+        @click="menuOpen = !menuOpen"
+      >
+        <AppIcon :name="menuOpen ? 'close' : 'menu'" :size="18" />
+      </button>
     </div>
 
-    <RouterLink v-if="timer.isActive" to="/timer" class="live-timer" :class="timer.phase">
-      <span class="dot" />
-      <span class="live-name">{{ timer.phase === 'break' ? 'Descanso' : activeSubject?.name || 'Estudiando' }}</span>
-      <span class="live-clock">{{ formatClock(timer.displaySeconds) }}</span>
+    <RouterLink
+      v-if="timer.isActive"
+      to="/timer"
+      class="live-timer"
+      :class="timer.phase"
+      :title="timer.phase === 'paused' ? 'Sesión en pausa' : 'Sesión en curso'"
+    >
+      <AppIcon v-if="timer.phase === 'paused'" name="pause" :size="12" />
+      <span v-else class="dot" aria-hidden="true" />
+      <span v-if="timer.phase === 'paused'" class="sr-only">En pausa:</span>
+      <span class="live-name">{{ liveLabel }}</span>
+      <span class="live-clock mono">{{ formatClock(timer.displaySeconds) }}</span>
     </RouterLink>
 
-    <nav class="nav">
+    <nav id="main-nav" class="nav" aria-label="Secciones">
       <RouterLink v-for="item in navItems" :key="item.path" :to="item.path" class="nav-link">
-        <span class="nav-icon">{{ item.icon }}</span>
-        <span class="nav-label">{{ item.label }}</span>
+        <AppIcon :name="item.name" :size="16" />
+        <span>{{ item.label }}</span>
       </RouterLink>
     </nav>
 
     <button class="theme-btn" type="button" @click="toggleTheme">
-      {{ theme === 'dark' ? '☀️ Tema claro' : '🌙 Tema oscuro' }}
+      <AppIcon :name="theme === 'dark' ? 'sun' : 'moon'" :size="16" />
+      <span>{{ theme === 'dark' ? 'Tema claro' : 'Tema oscuro' }}</span>
     </button>
   </aside>
 </template>
@@ -54,40 +86,63 @@ const activeSubject = computed(() => subjects.byId[timer.session?.subjectId])
 .sidebar {
   position: sticky;
   top: 0;
-  height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 22px 14px;
-  background: var(--surface);
+  gap: 16px;
+  padding: 18px 12px 14px;
   border-right: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .brand {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 10px;
-  font-weight: 700;
-  font-size: 1.1rem;
-  padding: 0 8px;
+  padding: 4px 8px;
+  border-radius: var(--radius-md);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+}
+
+.brand img {
+  border-radius: 6px;
+}
+
+.menu-btn {
+  display: none;
 }
 
 .nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 .nav-link {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: 10px;
+  gap: 10px;
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
   color: var(--text-muted);
   text-decoration: none;
   font-weight: 500;
   white-space: nowrap;
+  transition:
+    background-color 0.15s var(--ease),
+    color 0.15s var(--ease);
 }
 
 .nav-link:hover {
@@ -96,78 +151,88 @@ const activeSubject = computed(() => subjects.byId[timer.session?.subjectId])
 }
 
 .nav-link.router-link-exact-active {
-  background: var(--primary-soft);
-  color: var(--primary);
+  background: var(--surface-3);
+  color: var(--text);
 }
 
-.nav-icon {
-  font-size: 1.1rem;
-  width: 22px;
-  text-align: center;
+.nav-link.router-link-exact-active .icon {
+  color: var(--primary-text);
 }
 
 .live-timer {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: var(--primary-soft);
-  color: var(--primary);
+  min-height: 36px;
+  padding: 7px 10px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
   text-decoration: none;
-  font-weight: 600;
-  font-size: 0.9rem;
+  font-weight: 500;
+  font-size: 0.8125rem;
+  transition: border-color 0.15s var(--ease);
 }
 
-.live-timer.break {
-  background: var(--success-soft);
-  color: var(--success);
+.live-timer:hover {
+  border-color: var(--border-strong);
 }
 
 .live-timer.paused {
-  background: var(--warning-soft);
-  color: var(--warning);
+  color: var(--text-muted);
 }
 
 .live-name {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .live-clock {
-  font-family: var(--mono);
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
 }
 
 .dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: currentColor;
-  animation: pulse 1.4s ease-in-out infinite;
+  background: var(--primary);
+  flex-shrink: 0;
+  animation: pulse 2s ease-in-out infinite;
 }
 
-.paused .dot {
-  animation: none;
+.break .dot {
+  background: var(--success);
 }
 
 @keyframes pulse {
   50% {
-    opacity: 0.25;
+    opacity: 0.35;
   }
 }
 
 .theme-btn {
   margin-top: auto;
-  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  border: none;
   background: transparent;
   color: var(--text-muted);
-  padding: 9px 12px;
-  border-radius: 10px;
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
   font: inherit;
+  font-weight: 500;
   cursor: pointer;
   text-align: left;
+  transition:
+    background-color 0.15s var(--ease),
+    color 0.15s var(--ease);
 }
 
 .theme-btn:hover {
@@ -175,51 +240,51 @@ const activeSubject = computed(() => subjects.byId[timer.session?.subjectId])
   color: var(--text);
 }
 
-/* En pantallas chicas la barra lateral pasa a ser una barra superior */
+/* En pantallas chicas: barra superior fija con menú desplegable */
 @media (max-width: 860px) {
   .sidebar {
-    position: sticky;
     z-index: 20;
-    min-width: 0;
     height: auto;
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 16px 8px;
+    min-width: 0;
+    gap: 8px;
+    padding: 10px 12px;
+    padding-top: max(10px, env(safe-area-inset-top));
     border-right: none;
     border-bottom: 1px solid var(--border);
+    background: color-mix(in srgb, var(--bg) 92%, transparent);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
   }
 
-  .brand {
-    padding: 0;
-    flex: 1;
+  .menu-btn {
+    display: inline-grid;
   }
 
+  .nav,
   .theme-btn {
-    margin: 0;
-    padding: 6px 10px;
-    font-size: 0.85rem;
+    display: none;
   }
 
-  .live-timer {
-    order: 3;
-    width: 100%;
+  .open .nav,
+  .open .theme-btn {
+    display: flex;
   }
 
-  .nav {
-    order: 4;
-    width: 100%;
-    min-width: 0;
-    flex-direction: row;
-    overflow-x: auto;
-    scrollbar-width: none;
+  .open .nav {
+    padding-top: 4px;
+    border-top: 1px solid var(--border);
   }
 
-  .nav-link {
-    padding: 8px 10px;
-    gap: 6px;
-    font-size: 0.88rem;
+  .nav-link,
+  .theme-btn {
+    min-height: 44px;
+  }
+
+  .open .theme-btn {
+    margin-top: 0;
+    border-top: 1px solid var(--border);
+    border-radius: 0;
+    padding-top: 10px;
   }
 }
 </style>
