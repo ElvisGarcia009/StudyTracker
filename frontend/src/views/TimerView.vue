@@ -1,6 +1,8 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import AppIcon from '@/components/AppIcon.vue'
 import BaseModal from '@/components/BaseModal.vue'
+import ClockFace from '@/components/ClockFace.vue'
 import FocusRating from '@/components/FocusRating.vue'
 import SubjectBadge from '@/components/SubjectBadge.vue'
 import { scheduleApi } from '@/api'
@@ -116,19 +118,29 @@ async function discard() {
   await act(timer.discard)
 }
 
-// ---------- Anillo de progreso ----------
-const RADIUS = 120
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS
-const dashOffset = computed(() => CIRCUMFERENCE * (1 - timer.progress))
-
+// ---------- Esfera del reloj ----------
 const activeSubject = computed(() => subjects.byId[timer.session?.subjectId])
-const ringColor = computed(() => (timer.phase === 'break' ? 'var(--success)' : activeSubject.value?.color || 'var(--primary)'))
+// Las marcas toman la luz de la lámpara; en el descanso, el verde de la pantalla de banquero
+const tickColor = computed(() => (timer.phase === 'break' ? 'var(--success)' : 'var(--primary)'))
+const glowColor = computed(() =>
+  timer.phase === 'break' ? 'color-mix(in srgb, var(--success) 38%, transparent)' : 'var(--primary-glow)',
+)
 
 const phaseLabel = computed(() => {
-  if (timer.phase === 'break') return timer.breakRemaining > 0 ? '☕ Descanso' : '⏰ ¡Se acabó el descanso!'
-  if (timer.phase === 'paused') return '⏸ En pausa'
-  return timer.isPomodoro ? '🎯 Enfoque' : '📖 Estudiando'
+  if (timer.phase === 'break') return timer.breakRemaining > 0 ? 'Descanso' : 'Se acabó el descanso'
+  if (timer.phase === 'paused') return 'En pausa'
+  return timer.isPomodoro ? 'Enfoque' : 'Estudiando'
 })
+
+// En reposo, la esfera apagada muestra con qué tiempo arrancarías
+const previewTime = computed(() =>
+  form.mode === 'POMODORO' ? formatClock(Math.max(1, form.workMinutes || 0) * 60) : formatClock(0),
+)
+const previewCaption = computed(() =>
+  form.mode === 'POMODORO'
+    ? `${form.workMinutes || 0} min de enfoque, ${form.breakMinutes || 0} de descanso`
+    : 'Cronómetro libre',
+)
 
 // ---------- Notificaciones ----------
 const notifPermission = ref(notificationsSupported() ? Notification.permission : 'unsupported')
@@ -145,103 +157,114 @@ async function enableNotifications() {
         <p>Cronometra tu estudio en modo libre o con la técnica Pomodoro.</p>
       </div>
       <button v-if="notifPermission === 'default'" class="btn btn-sm" @click="enableNotifications">
-        🔔 Activar notificaciones
+        <AppIcon name="bell" :size="16" /> Activar notificaciones
       </button>
     </div>
 
     <!-- Sin materias -->
     <div v-if="subjects.loaded && !subjects.active.length && !timer.isActive" class="card empty">
-      <span class="emoji">📘</span>
       <h2>Necesitas al menos una materia</h2>
       <p>Crea una materia para poder cronometrar tu estudio.</p>
       <RouterLink to="/subjects" class="btn btn-primary">Crear materia</RouterLink>
     </div>
 
     <!-- Sesión en curso -->
-    <div v-else-if="timer.isActive" class="card timer-card" :class="timer.phase">
-      <SubjectBadge :subject="activeSubject" />
-      <div class="phase">{{ phaseLabel }}</div>
-
-      <div class="ring-wrap">
-        <svg viewBox="0 0 280 280" class="ring">
-          <circle cx="140" cy="140" :r="RADIUS" class="ring-track" />
-          <circle
-            cx="140"
-            cy="140"
-            :r="RADIUS"
-            class="ring-progress"
-            :stroke="ringColor"
-            :stroke-dasharray="CIRCUMFERENCE"
-            :stroke-dashoffset="dashOffset"
-          />
-        </svg>
-        <div class="ring-center">
-          <div class="clock">{{ formatClock(timer.displaySeconds) }}</div>
-          <div class="muted small">
-            <template v-if="timer.isPomodoro">Total: {{ formatClock(timer.elapsed) }}</template>
-            <template v-else>tiempo estudiado</template>
-          </div>
-        </div>
+    <section v-else-if="timer.isActive" class="stage" :class="timer.phase" aria-label="Sesión en curso">
+      <div class="stage-head">
+        <SubjectBadge :subject="activeSubject" />
+        <span class="phase">{{ phaseLabel }}</span>
       </div>
 
-      <div v-if="timer.isPomodoro" class="tomatoes" :title="`${timer.session.pomodorosCompleted} pomodoros completados`">
-        <span v-for="n in Math.max(4, timer.session.pomodorosCompleted)" :key="n" :class="{ done: n <= timer.session.pomodorosCompleted }">🍅</span>
+      <ClockFace
+        :time="formatClock(timer.displaySeconds)"
+        :progress="timer.progress"
+        :color="tickColor"
+        :glow="glowColor"
+        :light="timer.phase === 'paused' ? 'dim' : 'on'"
+        :ticking="timer.phase !== 'paused'"
+      >
+        <template v-if="timer.isPomodoro">Total {{ formatClock(timer.elapsed) }}</template>
+        <template v-else>tiempo estudiado</template>
+      </ClockFace>
+
+      <div v-if="timer.isPomodoro" class="pomodoros">
+        <span class="bulbs" aria-hidden="true">
+          <i v-for="n in Math.max(4, timer.session.pomodorosCompleted)" :key="n" :class="{ done: n <= timer.session.pomodorosCompleted }" />
+        </span>
+        <span class="muted small">
+          {{ timer.session.pomodorosCompleted }} {{ timer.session.pomodorosCompleted === 1 ? 'pomodoro completado' : 'pomodoros completados' }}
+        </span>
       </div>
 
       <div class="controls">
-        <button v-if="timer.phase === 'focus'" class="btn btn-lg" :disabled="timer.busy" @click="act(timer.pause)">⏸ Pausar</button>
+        <button v-if="timer.phase === 'focus'" class="btn btn-lg" :disabled="timer.busy" @click="act(timer.pause)">
+          <AppIcon name="pause" /> Pausar
+        </button>
         <button v-else-if="timer.phase === 'paused'" class="btn btn-lg btn-primary" :disabled="timer.busy" @click="act(timer.resume)">
-          ▶ Reanudar
+          <AppIcon name="play" /> Reanudar
         </button>
         <button v-else class="btn btn-lg btn-primary" :disabled="timer.busy" @click="act(timer.resume)">
-          {{ timer.breakRemaining > 0 ? '⏭ Saltar descanso' : '▶ Seguir estudiando' }}
+          <AppIcon :name="timer.breakRemaining > 0 ? 'skip' : 'play'" />
+          {{ timer.breakRemaining > 0 ? 'Saltar descanso' : 'Seguir estudiando' }}
         </button>
-        <button class="btn btn-lg" :disabled="timer.busy" @click="openFinish">✓ Terminar</button>
+        <button class="btn btn-lg" :disabled="timer.busy" @click="openFinish"><AppIcon name="check" /> Terminar</button>
       </div>
       <button class="btn btn-ghost btn-sm btn-danger" :disabled="timer.busy" @click="discard">Descartar sesión</button>
-    </div>
+    </section>
 
     <!-- Empezar una sesión -->
-    <div v-else-if="subjects.loaded" class="grid start-grid">
-      <div class="card">
-        <div class="card-header"><h2>Nueva sesión</h2></div>
-        <form class="form" @submit.prevent="start()">
-          <div class="field">
-            <label for="subject">Materia</label>
-            <select id="subject" v-model="form.subjectId" class="input">
-              <option v-for="s in subjects.active" :key="s.id" :value="s.id">{{ s.name }}</option>
-            </select>
-          </div>
+    <template v-else-if="subjects.loaded">
+      <div class="start">
+        <div class="idle-clock">
+          <ClockFace :time="previewTime" light="off">{{ previewCaption }}</ClockFace>
+        </div>
 
-          <div class="field">
-            <label>Modo</label>
-            <div class="segmented">
-              <button type="button" :class="{ active: form.mode === 'POMODORO' }" @click="form.mode = 'POMODORO'">🍅 Pomodoro</button>
-              <button type="button" :class="{ active: form.mode === 'FREE' }" @click="form.mode = 'FREE'">⏱️ Libre</button>
+        <div class="card start-form">
+          <div class="card-header"><h2>Nueva sesión</h2></div>
+          <form class="form" @submit.prevent="start()">
+            <div class="field">
+              <label for="subject">Materia</label>
+              <select id="subject" v-model="form.subjectId" class="input">
+                <option v-for="s in subjects.active" :key="s.id" :value="s.id">{{ s.name }}</option>
+              </select>
             </div>
-          </div>
 
-          <div v-if="form.mode === 'POMODORO'" class="field-row">
             <div class="field">
-              <label for="work">Enfoque (min)</label>
-              <input id="work" v-model.number="form.workMinutes" type="number" min="1" max="180" class="input" />
+              <span id="mode-label" class="label">Modo</span>
+              <div class="segmented" role="group" aria-labelledby="mode-label">
+                <button type="button" :class="{ active: form.mode === 'POMODORO' }" :aria-pressed="form.mode === 'POMODORO'" @click="form.mode = 'POMODORO'">
+                  Pomodoro
+                </button>
+                <button type="button" :class="{ active: form.mode === 'FREE' }" :aria-pressed="form.mode === 'FREE'" @click="form.mode = 'FREE'">
+                  Libre
+                </button>
+              </div>
             </div>
-            <div class="field">
-              <label for="break">Descanso (min)</label>
-              <input id="break" v-model.number="form.breakMinutes" type="number" min="1" max="60" class="input" />
-            </div>
-            <div class="field">
-              <label for="long">Descanso largo (min)</label>
-              <input id="long" v-model.number="form.longBreakMinutes" type="number" min="1" max="120" class="input" />
-            </div>
-          </div>
-          <p v-if="form.mode === 'POMODORO'" class="muted small hint">
-            Cada 4 pomodoros toca un descanso largo. Al terminar cada fase sonará un aviso.
-          </p>
-          <p v-else class="muted small hint">El cronómetro corre hasta que lo pauses o lo termines.</p>
 
-          <button class="btn btn-primary btn-lg" type="submit" :disabled="timer.busy || !form.subjectId">▶ Empezar</button>
-        </form>
+            <div v-if="form.mode === 'POMODORO'" class="field-row">
+              <div class="field">
+                <label for="work">Enfoque (min)</label>
+                <input id="work" v-model.number="form.workMinutes" type="number" min="1" max="180" class="input" />
+              </div>
+              <div class="field">
+                <label for="break">Descanso (min)</label>
+                <input id="break" v-model.number="form.breakMinutes" type="number" min="1" max="60" class="input" />
+              </div>
+              <div class="field">
+                <label for="long">Descanso largo (min)</label>
+                <input id="long" v-model.number="form.longBreakMinutes" type="number" min="1" max="120" class="input" />
+              </div>
+            </div>
+            <p v-if="form.mode === 'POMODORO'" class="muted small hint">
+              Cada 4 pomodoros toca un descanso largo. Al terminar cada fase sonará un aviso.
+            </p>
+            <p v-else class="muted small hint">El cronómetro corre hasta que lo pauses o lo termines.</p>
+
+            <button class="btn btn-primary btn-lg" type="submit" :disabled="timer.busy || !form.subjectId">
+              <AppIcon name="play" /> Empezar
+            </button>
+          </form>
+        </div>
       </div>
 
       <div class="card">
@@ -249,27 +272,40 @@ async function enableNotifications() {
           <h2>Plan de hoy</h2>
           <RouterLink to="/schedule" class="btn btn-ghost btn-sm">Editar plan</RouterLink>
         </div>
-        <div v-if="todayBlocks.length" class="today-list">
-          <div v-for="b in todayBlocks" :key="b.id" class="today-item">
+        <ul v-if="todayBlocks.length" class="today-list">
+          <li v-for="b in todayBlocks" :key="b.id" class="today-item">
+            <span class="when num">{{ b.startTime || 'Sin hora' }}</span>
             <SubjectBadge :subject="subjects.byId[b.subjectId]" />
-            <span class="muted small">{{ b.startTime ? b.startTime + ' · ' : '' }}{{ formatMinutes(b.plannedMinutes) }}</span>
+            <span class="muted small duration">{{ formatMinutes(b.plannedMinutes) }}</span>
             <span class="spacer" />
-            <button class="btn btn-sm" :disabled="timer.busy" @click="start(b.subjectId)">▶</button>
-          </div>
+            <button
+              class="btn btn-sm"
+              :disabled="timer.busy"
+              :aria-label="`Empezar ${subjects.byId[b.subjectId]?.name || 'materia'}`"
+              @click="start(b.subjectId)"
+            >
+              <AppIcon name="play" :size="14" /> <span class="btn-text">Empezar</span>
+            </button>
+          </li>
+        </ul>
+        <div v-else class="empty compact">
+          <p>No hay bloques planificados para hoy.</p>
+          <RouterLink to="/schedule" class="btn btn-sm">Planificar la semana</RouterLink>
         </div>
-        <div v-else class="empty"><span class="emoji">🗓️</span>No hay bloques planificados para hoy.</div>
       </div>
-    </div>
+    </template>
 
     <BaseModal v-if="finishing" title="¿Cómo te fue?" @close="cancelFinish">
       <form id="finish-form" class="form" @submit.prevent="saveFinish">
         <p class="muted">
           Estudiaste <strong>{{ formatMinutes(timer.elapsed / 60) }}</strong> de
           <strong>{{ activeSubject?.name }}</strong>
-          <template v-if="timer.isPomodoro"> · {{ timer.session?.pomodorosCompleted }} 🍅</template>
+          <template v-if="timer.isPomodoro">
+            en {{ timer.session?.pomodorosCompleted }} {{ timer.session?.pomodorosCompleted === 1 ? 'pomodoro' : 'pomodoros' }}
+          </template>
         </p>
         <div class="field">
-          <label>Concentración</label>
+          <span class="label">Concentración</span>
           <FocusRating v-model="finishForm.focusRating" />
         </div>
         <div class="field">
@@ -286,81 +322,62 @@ async function enableNotifications() {
 </template>
 
 <style scoped>
-.timer-card {
+/* ---------- Sesión en curso: sin caja, la esfera bajo la lámpara ---------- */
+.stage {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
-  padding: 32px 18px;
+  gap: 18px;
+  padding: 8px 0 12px;
+}
+
+.stage-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
 }
 
 .phase {
-  font-weight: 600;
-  font-size: 1.05rem;
+  font-family: var(--serif);
+  font-size: 1.6rem;
+  color: var(--primary);
+  transition: color 0.6s ease;
 }
 
-.ring-wrap {
-  position: relative;
-  width: min(300px, 78vw);
-  aspect-ratio: 1;
+.break .phase {
+  color: var(--success);
 }
 
-.ring {
-  width: 100%;
-  height: 100%;
-  transform: rotate(-90deg);
+.paused .phase {
+  color: var(--text-muted);
 }
 
-.ring-track {
-  fill: none;
-  stroke: var(--surface-2);
-  stroke-width: 14;
-}
-
-.ring-progress {
-  fill: none;
-  stroke-width: 14;
-  stroke-linecap: round;
-  transition: stroke-dashoffset 0.5s linear, stroke 0.3s;
-}
-
-.ring-center {
-  position: absolute;
-  inset: 0;
+.pomodoros {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  gap: 8px;
 }
 
-.clock {
-  font-family: var(--mono);
-  font-size: clamp(2.6rem, 11vw, 3.6rem);
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  font-variant-numeric: tabular-nums;
-}
-
-.paused .clock {
-  opacity: 0.6;
-}
-
-.tomatoes {
+.bulbs {
   display: flex;
-  gap: 6px;
-  font-size: 1.3rem;
+  gap: 9px;
   flex-wrap: wrap;
   justify-content: center;
 }
 
-.tomatoes span {
-  filter: grayscale(1);
-  opacity: 0.3;
+.bulbs i {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--tick-off);
 }
 
-.tomatoes span.done {
-  filter: none;
-  opacity: 1;
+.bulbs i.done {
+  background: var(--primary);
+  box-shadow: 0 0 10px var(--primary-glow);
 }
 
 .controls {
@@ -368,28 +385,42 @@ async function enableNotifications() {
   gap: 10px;
   flex-wrap: wrap;
   justify-content: center;
+  margin-top: 4px;
 }
 
-.start-grid {
-  grid-template-columns: 1.3fr 1fr;
-  align-items: start;
+/* ---------- Reposo: esfera apagada + formulario ---------- */
+.start {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: 28px;
+  align-items: center;
+}
+
+.idle-clock {
+  display: grid;
+  place-items: center;
+  padding: 12px 0;
 }
 
 .hint {
-  margin: -4px 0 0;
+  margin-top: -6px;
+}
+
+.start-form .btn-lg {
+  align-self: flex-start;
 }
 
 .today-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
 .today-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 4px;
+  gap: 12px;
+  padding: 11px 2px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -397,9 +428,45 @@ async function enableNotifications() {
   border-bottom: none;
 }
 
+.today-item :deep(.badge) {
+  min-width: 0;
+}
+
+.today-item > .btn,
+.duration {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.when {
+  flex-shrink: 0;
+  font-family: var(--serif);
+  min-width: 3.4em;
+  color: var(--text-muted);
+}
+
+.empty.compact {
+  padding: 18px 12px;
+}
+
 @media (max-width: 860px) {
-  .start-grid {
-    grid-template-columns: 1fr;
+  .start {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .idle-clock :deep(.face) {
+    width: min(250px, 66vw);
+  }
+}
+
+@media (max-width: 480px) {
+  .today-item {
+    gap: 10px;
+  }
+
+  .today-item .btn-text {
+    display: none;
   }
 }
 </style>

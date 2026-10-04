@@ -33,15 +33,19 @@ onMounted(async () => {
 <style scoped>
 .layout {
   display: grid;
-  grid-template-columns: 240px 1fr;
+  grid-template-columns: 252px minmax(0, 1fr);
   min-height: 100vh;
 }
 
 .content {
-  padding: 32px clamp(16px, 4vw, 44px) 48px;
-  max-width: 1200px;
+  padding: 40px clamp(16px, 3.5vw, 64px) 64px;
+  /* Ocupa todo el ancho disponible; solo en monitores ultra anchos se centra */
+  max-width: 2000px;
+  margin-inline: auto;
   width: 100%;
   min-width: 0;
+  /* el halo de la lámpara puede derramarse, pero nunca crear scroll horizontal */
+  overflow-x: clip;
 }
 
 @media (max-width: 860px) {
@@ -51,7 +55,7 @@ onMounted(async () => {
   }
 
   .content {
-    padding: 20px 16px 40px;
+    padding: 22px 16px 48px;
   }
 }
 </style>

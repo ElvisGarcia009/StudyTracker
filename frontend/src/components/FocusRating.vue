@@ -7,7 +7,7 @@ const labels = ['Muy distraído', 'Distraído', 'Normal', 'Concentrado', 'Súper
 </script>
 
 <template>
-  <span class="rating" :class="{ readonly }">
+  <span class="rating" :class="{ readonly }" :title="readonly && model ? `Concentración: ${labels[model - 1]}` : undefined">
     <button
       v-for="n in 5"
       :key="n"
@@ -15,7 +15,7 @@ const labels = ['Muy distraído', 'Distraído', 'Normal', 'Concentrado', 'Súper
       class="star"
       :class="{ on: model && n <= model }"
       :disabled="readonly"
-      :title="labels[n - 1]"
+      :title="readonly ? undefined : labels[n - 1]"
       :aria-label="`${n} de 5: ${labels[n - 1]}`"
       @click="model = model === n ? null : n"
     >
@@ -36,11 +36,11 @@ const labels = ['Muy distraído', 'Distraído', 'Normal', 'Concentrado', 'Súper
   border: none;
   background: none;
   padding: 0 1px;
-  font-size: 1.5rem;
+  font-size: 1.55rem;
   line-height: 1;
-  color: var(--border);
+  color: var(--tick-off);
   cursor: pointer;
-  transition: transform 0.1s;
+  transition: transform 0.12s, color 0.15s, text-shadow 0.2s;
 }
 
 .star:hover:not(:disabled) {
@@ -48,16 +48,18 @@ const labels = ['Muy distraído', 'Distraído', 'Normal', 'Concentrado', 'Súper
 }
 
 .star.on {
-  color: #f5b301;
+  color: var(--primary);
+  text-shadow: 0 0 12px var(--primary-glow);
 }
 
 .readonly .star {
-  font-size: 0.95rem;
+  font-size: 0.92rem;
   cursor: default;
+  text-shadow: none;
 }
 
 .label {
-  margin-left: 8px;
+  margin-left: 10px;
   color: var(--text-muted);
   font-size: 0.88rem;
 }

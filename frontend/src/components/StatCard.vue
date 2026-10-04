@@ -1,4 +1,5 @@
 <script setup>
+/** Una cifra del resumen. Vive dentro de un panel compartido, no en una tarjeta propia. */
 defineProps({
   icon: String,
   label: { type: String, required: true },
@@ -10,16 +11,13 @@ defineProps({
 </script>
 
 <template>
-  <div class="card stat">
-    <div class="stat-top">
-      <span class="stat-label">{{ label }}</span>
-      <span class="stat-icon">{{ icon }}</span>
-    </div>
-    <div class="stat-value">{{ value }}</div>
-    <div v-if="progress !== null" class="bar">
+  <div class="stat">
+    <span class="stat-label">{{ label }}</span>
+    <span class="stat-value">{{ value }}</span>
+    <div v-if="progress !== null" class="bar" role="progressbar" :aria-valuenow="Math.round(progress)" aria-valuemin="0" aria-valuemax="100">
       <div class="bar-fill" :style="{ width: Math.min(100, progress) + '%' }" />
     </div>
-    <div v-if="hint" class="stat-hint">{{ hint }}</div>
+    <span v-if="hint" class="stat-hint">{{ hint }}</span>
   </div>
 </template>
 
@@ -28,28 +26,21 @@ defineProps({
   display: flex;
   flex-direction: column;
   gap: 6px;
-}
-
-.stat-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  min-width: 0;
 }
 
 .stat-label {
   color: var(--text-muted);
-  font-size: 0.88rem;
+  font-size: 0.9rem;
   font-weight: 500;
 }
 
-.stat-icon {
-  font-size: 1.3rem;
-}
-
 .stat-value {
-  font-size: 1.7rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-family: var(--serif);
+  font-size: 2rem;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
 }
 
 .stat-hint {
@@ -58,8 +49,9 @@ defineProps({
 }
 
 .bar {
-  height: 6px;
-  background: var(--surface-2);
+  height: 4px;
+  margin: 4px 0 2px;
+  background: var(--recess);
   border-radius: 99px;
   overflow: hidden;
 }
@@ -68,6 +60,7 @@ defineProps({
   height: 100%;
   background: var(--primary);
   border-radius: 99px;
-  transition: width 0.4s ease;
+  box-shadow: 0 0 10px var(--primary-glow);
+  transition: width 0.5s ease;
 }
 </style>

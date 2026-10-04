@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { Bar, Doughnut } from 'vue-chartjs'
+import AppIcon from '@/components/AppIcon.vue'
 import StatCard from '@/components/StatCard.vue'
 import HeatMap from '@/components/HeatMap.vue'
 import ProgressBar from '@/components/ProgressBar.vue'
@@ -90,14 +91,14 @@ const subjectChart = computed(() => {
           data: list.map((s) => s.minutes),
           backgroundColor: list.map((s) => s.color),
           borderColor: cssVar('--surface'),
-          borderWidth: 3,
+          borderWidth: 2,
         },
       ],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      cutout: '62%',
+      cutout: '70%',
       plugins: {
         legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, color: cssVar('--text-muted') } },
         tooltip: { callbacks: { label: (c) => ` ${c.label}: ${formatMinutes(c.raw)}` } },
@@ -107,66 +108,73 @@ const subjectChart = computed(() => {
 })
 
 const subjectsWithGoal = computed(() => (stats.value?.weekBySubject ?? []).filter((s) => s.goalMinutes > 0))
+
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
+
+// Una frase que resume el día, debajo del saludo
+const lede = computed(() => {
+  const s = stats.value
+  if (!s) return ''
+  const today = s.todayMinutes > 0 ? `Hoy llevas ${formatMinutes(s.todayMinutes)} de estudio.` : 'Hoy todavía no has estudiado.'
+  const streak = s.currentStreak > 0 ? ` Vas en una racha de ${plural(s.currentStreak, 'día', 'días')}.` : ''
+  return today + streak
+})
 </script>
 
 <template>
   <div class="page">
-    <div class="page-header">
-      <div>
-        <h1>{{ greeting }} 👋</h1>
-        <p>{{ formatDate(new Date()) }}</p>
+    <header class="hero">
+      <div class="hero-text">
+        <h1>{{ greeting }}</h1>
+        <p class="date">{{ formatDate(new Date()) }}</p>
+        <p v-if="lede" class="lede">{{ lede }}</p>
       </div>
-      <RouterLink to="/timer" class="btn btn-primary">⏱️ Empezar a estudiar</RouterLink>
-    </div>
+      <RouterLink to="/timer" class="btn btn-primary btn-lg"><AppIcon name="play" /> Empezar a estudiar</RouterLink>
+    </header>
 
     <div v-if="subjects.loaded && subjects.subjects.length === 0" class="card empty">
-      <span class="emoji">📘</span>
       <h2>Todavía no tienes materias</h2>
       <p>Crea tu primera materia para empezar a planificar y medir tu estudio.</p>
       <RouterLink to="/subjects" class="btn btn-primary">Crear materia</RouterLink>
     </div>
 
     <template v-if="stats">
-      <div class="grid grid-4">
+      <section class="card ledger" aria-label="Resumen">
         <StatCard
-          icon="☀️"
           label="Hoy"
           :value="formatMinutes(stats.todayMinutes)"
           :progress="pct(stats.todayMinutes, stats.todayPlannedMinutes)"
           :hint="stats.todayPlannedMinutes ? `de ${formatMinutes(stats.todayPlannedMinutes)} planificados` : 'Nada planificado para hoy'"
         />
         <StatCard
-          icon="📆"
           label="Esta semana"
           :value="formatHours(stats.weekMinutes)"
           :progress="pct(stats.weekMinutes, weekTarget)"
           :hint="weekTarget ? `Meta: ${formatHours(weekTarget)}` : 'Define una meta semanal en tus materias'"
         />
         <StatCard
-          icon="🔥"
           label="Racha actual"
-          :value="`${stats.currentStreak} ${stats.currentStreak === 1 ? 'día' : 'días'}`"
-          :hint="`Mejor racha: ${stats.bestStreak} ${stats.bestStreak === 1 ? 'día' : 'días'}`"
+          :value="plural(stats.currentStreak, 'día', 'días')"
+          :hint="`Mejor racha: ${plural(stats.bestStreak, 'día', 'días')}`"
         />
         <StatCard
-          icon="⏳"
           label="Total acumulado"
           :value="formatHours(stats.totalMinutes)"
-          :hint="`${stats.totalSessions} sesiones${stats.averageFocus ? ` · concentración ${stats.averageFocus}/5` : ''}`"
+          :hint="`${plural(stats.totalSessions, 'sesión', 'sesiones')}${stats.averageFocus ? `, concentración ${stats.averageFocus}/5` : ''}`"
         />
-      </div>
+      </section>
 
-      <div class="grid charts">
-        <div class="card">
+      <div class="charts">
+        <section class="card">
           <div class="card-header">
             <h2>Últimos 7 días</h2>
-            <span class="muted small">horas</span>
+            <span class="muted small">en horas</span>
           </div>
           <div class="chart-box">
             <Bar :key="themeVersion" :data="weekChart.data" :options="weekChart.options" />
           </div>
-        </div>
-        <div class="card">
+        </section>
+        <section class="card">
           <div class="card-header">
             <h2>Por materia</h2>
             <span class="muted small">{{ subjectSource.title }}</span>
@@ -174,34 +182,37 @@ const subjectsWithGoal = computed(() => (stats.value?.weekBySubject ?? []).filte
           <div v-if="subjectSource.list.length" class="chart-box">
             <Doughnut :key="themeVersion" :data="subjectChart.data" :options="subjectChart.options" />
           </div>
-          <div v-else class="empty"><span class="emoji">🍩</span>Aún no hay sesiones registradas</div>
-        </div>
+          <div v-else class="empty">
+            <p>Aún no hay sesiones registradas.</p>
+            <RouterLink to="/timer" class="btn btn-sm">Empezar una sesión</RouterLink>
+          </div>
+        </section>
       </div>
 
-      <div v-if="subjectsWithGoal.length" class="card">
+      <section v-if="subjectsWithGoal.length" class="card">
         <div class="card-header">
           <h2>Meta semanal por materia</h2>
         </div>
         <div class="goal-list">
           <div v-for="s in subjectsWithGoal" :key="s.subjectId" class="goal-row">
             <div class="row">
-              <span class="swatch" :style="{ background: s.color }" />
+              <span class="spine" :style="{ background: s.color }" />
               <strong>{{ s.name }}</strong>
               <span class="spacer" />
-              <span class="muted small">{{ formatMinutes(s.minutes) }} / {{ formatMinutes(s.goalMinutes) }}</span>
-              <span v-if="s.minutes >= s.goalMinutes" class="tag tag-success">✓ Cumplida</span>
+              <span class="muted small num">{{ formatMinutes(s.minutes) }} de {{ formatMinutes(s.goalMinutes) }}</span>
+              <span v-if="s.minutes >= s.goalMinutes" class="tag tag-success">Cumplida</span>
             </div>
-            <ProgressBar :value="(s.minutes / s.goalMinutes) * 100" :color="s.color" />
+            <ProgressBar :value="(s.minutes / s.goalMinutes) * 100" :color="s.color" :height="6" />
           </div>
         </div>
-      </div>
+      </section>
 
-      <div class="card">
+      <section class="card">
         <div class="card-header">
           <h2>Actividad del último año</h2>
         </div>
         <HeatMap :days="heatmap" />
-      </div>
+      </section>
     </template>
 
     <div v-else-if="loading" class="card empty">Cargando estadísticas…</div>
@@ -209,8 +220,52 @@ const subjectsWithGoal = computed(() => (stats.value?.weekBySubject ?? []).filte
 </template>
 
 <style scoped>
+.hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 6px 0 8px;
+}
+
+.hero h1 {
+  font-size: clamp(2.3rem, 5vw, 3.3rem);
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+.date {
+  margin-top: 8px;
+  color: var(--text-muted);
+}
+
+.lede {
+  margin-top: 14px;
+  font-size: 1.12rem;
+  max-width: 46ch;
+}
+
+/* Cuatro cifras en una sola ficha, separadas por filetes */
+.ledger {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 22px 6px;
+}
+
+.ledger > * {
+  padding: 2px 22px;
+  border-left: 1px solid var(--border);
+}
+
+.ledger > :first-child {
+  border-left: none;
+}
+
 .charts {
-  grid-template-columns: 1.6fr 1fr;
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: 16px;
 }
 
 .chart-box {
@@ -221,24 +276,58 @@ const subjectsWithGoal = computed(() => (stats.value?.weekBySubject ?? []).filte
 .goal-list {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
 
 .goal-row {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
-.swatch {
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
+.spine {
+  width: 5px;
+  height: 16px;
+  border-radius: 2px;
+}
+
+@media (max-width: 1000px) {
+  .ledger {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 18px;
+  }
+
+  .ledger > :nth-child(odd) {
+    border-left: none;
+  }
+
+  .ledger > :nth-child(n + 3) {
+    border-top: 1px solid var(--border);
+    padding-top: 18px;
+  }
 }
 
 @media (max-width: 900px) {
   .charts {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .hero .btn-lg {
+    width: 100%;
+  }
+
+  .ledger {
+    padding: 16px 0;
+  }
+
+  .ledger > * {
+    padding: 2px 16px;
+  }
+
+  .ledger > :nth-child(n + 3) {
+    padding-top: 16px;
   }
 }
 </style>

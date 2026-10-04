@@ -9,7 +9,7 @@ const toast = useToastStore()
     <TransitionGroup name="toast">
       <div v-for="t in toast.toasts" :key="t.id" class="toast" :class="t.type" @click="toast.dismiss(t.id)">
         <span class="toast-icon">{{ t.icon }}</span>
-        <div>
+        <div class="toast-text">
           <strong>{{ t.title }}</strong>
           <p v-if="t.message">{{ t.message }}</p>
         </div>
@@ -31,46 +31,59 @@ const toast = useToastStore()
 }
 
 .toast {
+  --c: var(--primary);
   display: flex;
   gap: 12px;
   align-items: flex-start;
-  padding: 12px 16px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-left: 4px solid var(--primary);
-  border-radius: 12px;
+  padding: 13px 16px 13px 14px;
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
   box-shadow: var(--shadow-lg);
   cursor: pointer;
 }
 
 .toast.success {
-  border-left-color: var(--success);
+  --c: var(--success);
 }
 
 .toast.error {
-  border-left-color: var(--danger);
-}
-
-.toast.achievement {
-  border-left-color: var(--warning);
+  --c: var(--danger);
 }
 
 .toast-icon {
-  font-size: 1.3rem;
-  line-height: 1.2;
-}
-
-.toast.success .toast-icon {
-  color: var(--success);
-}
-
-.toast.error .toast-icon {
-  color: var(--danger);
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--c) 16%, transparent);
+  color: var(--c);
   font-weight: 700;
+  font-size: 0.95rem;
+}
+
+/* Un logro llega con la luz de la lámpara */
+.toast.achievement {
+  border-color: color-mix(in srgb, var(--primary) 45%, transparent);
+  box-shadow: var(--shadow-lg), 0 0 40px -12px var(--primary-glow);
+}
+
+.toast.achievement .toast-icon {
+  width: 36px;
+  height: 36px;
+  font-size: 1.3rem;
+}
+
+.toast-text {
+  min-width: 0;
 }
 
 .toast p {
-  margin: 2px 0 0;
+  margin-top: 2px;
   color: var(--text-muted);
   font-size: 0.88rem;
 }
@@ -78,7 +91,7 @@ const toast = useToastStore()
 .toast-enter-from,
 .toast-leave-to {
   opacity: 0;
-  transform: translateX(30px);
+  transform: translateY(12px);
 }
 
 .toast-enter-active,

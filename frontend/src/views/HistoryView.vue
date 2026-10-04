@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import AppIcon from '@/components/AppIcon.vue'
 import BaseModal from '@/components/BaseModal.vue'
 import FocusRating from '@/components/FocusRating.vue'
 import SubjectBadge from '@/components/SubjectBadge.vue'
@@ -128,9 +129,13 @@ async function remove(session) {
     <div class="page-header">
       <div>
         <h1>Historial</h1>
-        <p>{{ sessions.length }} sesiones · {{ formatMinutes(totalMinutes) }} en el periodo</p>
+        <p class="num">
+          {{ sessions.length }} {{ sessions.length === 1 ? 'sesión' : 'sesiones' }} en el periodo, {{ formatMinutes(totalMinutes) }} en total
+        </p>
       </div>
-      <button class="btn btn-primary" :disabled="!subjects.active.length" @click="open()">＋ Registrar sesión</button>
+      <button class="btn btn-primary" :disabled="!subjects.active.length" @click="open()">
+        <AppIcon name="plus" :size="16" /> Registrar sesión
+      </button>
     </div>
 
     <div class="card filters">
@@ -152,26 +157,30 @@ async function remove(session) {
     </div>
 
     <div v-if="!loading && !sessions.length" class="card empty">
-      <span class="emoji">🕘</span>
-      No hay sesiones en este periodo.
+      <h2>No hay sesiones en este periodo</h2>
+      <p>Amplía las fechas, cambia la materia o registra a mano una sesión que no cronometraste.</p>
     </div>
 
     <section v-for="g in groups" :key="g.day" class="day-group">
       <div class="day-title">
         <h2>{{ formatDate(g.day) }}</h2>
-        <span class="tag">{{ formatMinutes(g.minutes) }}</span>
+        <span class="day-total num">{{ formatMinutes(g.minutes) }}</span>
       </div>
       <div class="card session-list">
         <article v-for="s in g.list" :key="s.id" class="session">
           <div class="session-main">
+            <span class="time num">{{ formatTime(s.startedAt) }}–{{ formatTime(s.endedAt) }}</span>
             <SubjectBadge :subject="subjects.byId[s.subjectId]" />
-            <span class="muted small">{{ formatTime(s.startedAt) }} – {{ formatTime(s.endedAt) }}</span>
-            <span class="duration">{{ formatMinutes(s.elapsedSeconds / 60) }}</span>
-            <span v-if="s.mode === 'POMODORO'" class="tag" :title="`${s.pomodorosCompleted} pomodoros`">🍅 {{ s.pomodorosCompleted }}</span>
+            <span class="duration num">{{ formatMinutes(s.elapsedSeconds / 60) }}</span>
+            <span v-if="s.mode === 'POMODORO'" class="tag">
+              {{ s.pomodorosCompleted }} {{ s.pomodorosCompleted === 1 ? 'pomodoro' : 'pomodoros' }}
+            </span>
             <FocusRating v-if="s.focusRating" :model-value="s.focusRating" readonly />
             <span class="spacer" />
-            <button class="icon-btn" title="Editar" aria-label="Editar" @click="open(s)">✏️</button>
-            <button class="icon-btn" title="Eliminar" aria-label="Eliminar" @click="remove(s)">🗑️</button>
+            <span class="session-actions">
+              <button class="icon-btn" title="Editar" aria-label="Editar sesión" @click="open(s)"><AppIcon name="edit" /></button>
+              <button class="icon-btn danger" title="Eliminar" aria-label="Eliminar sesión" @click="remove(s)"><AppIcon name="trash" /></button>
+            </span>
           </div>
           <p v-if="s.notes" class="notes">{{ s.notes }}</p>
         </article>
@@ -198,10 +207,12 @@ async function remove(session) {
         </div>
         <div class="field-row">
           <div class="field">
-            <label>Modo</label>
-            <div class="segmented">
-              <button type="button" :class="{ active: form.mode === 'FREE' }" @click="form.mode = 'FREE'">Libre</button>
-              <button type="button" :class="{ active: form.mode === 'POMODORO' }" @click="form.mode = 'POMODORO'">🍅 Pomodoro</button>
+            <span id="s-mode-label" class="label">Modo</span>
+            <div class="segmented" role="group" aria-labelledby="s-mode-label">
+              <button type="button" :class="{ active: form.mode === 'FREE' }" :aria-pressed="form.mode === 'FREE'" @click="form.mode = 'FREE'">Libre</button>
+              <button type="button" :class="{ active: form.mode === 'POMODORO' }" :aria-pressed="form.mode === 'POMODORO'" @click="form.mode = 'POMODORO'">
+                Pomodoro
+              </button>
             </div>
           </div>
           <div v-if="form.mode === 'POMODORO'" class="field">
@@ -210,7 +221,7 @@ async function remove(session) {
           </div>
         </div>
         <div class="field">
-          <label>Concentración</label>
+          <span class="label">Concentración</span>
           <FocusRating v-model="form.focusRating" />
         </div>
         <div class="field">
@@ -232,26 +243,39 @@ async function remove(session) {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 12px;
+  padding: 16px 18px;
 }
 
 .day-group {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .day-title {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 0 4px;
+}
+
+.day-title h2 {
+  font-size: 1.3rem;
+}
+
+.day-total {
+  color: var(--primary);
+  font-weight: 600;
+  font-size: 0.92rem;
 }
 
 .session-list {
-  padding: 4px 16px;
+  padding: 2px 18px;
 }
 
 .session {
-  padding: 12px 0;
+  padding: 13px 0;
   border-bottom: 1px solid var(--border);
 }
 
@@ -262,23 +286,49 @@ async function remove(session) {
 .session-main {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px 14px;
   flex-wrap: wrap;
 }
 
-.duration {
-  font-weight: 600;
-  font-family: var(--mono);
-  font-size: 0.9rem;
+.time {
+  font-family: var(--serif);
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  min-width: 7.6em;
 }
 
+.duration {
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+
+.session-actions {
+  display: inline-flex;
+  margin-left: auto;
+  margin-right: -6px;
+}
+
+/* Las notas, como una ficha metida entre las páginas */
 .notes {
-  margin: 8px 0 0;
-  padding: 8px 12px;
-  background: var(--surface-2);
-  border-radius: 8px;
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: var(--recess);
+  border-left: 2px solid color-mix(in srgb, var(--primary) 60%, transparent);
+  border-radius: 4px 10px 10px 4px;
   white-space: pre-wrap;
-  font-size: 0.9rem;
+  font-size: 0.92rem;
   color: var(--text-muted);
+  max-width: 75ch;
+}
+
+@media (max-width: 640px) {
+  .session-list {
+    padding: 2px 14px;
+  }
+
+  .time {
+    min-width: 0;
+    width: 100%;
+  }
 }
 </style>

@@ -1,5 +1,6 @@
 <script setup>
 import { computed, reactive, ref } from 'vue'
+import AppIcon from '@/components/AppIcon.vue'
 import BaseModal from '@/components/BaseModal.vue'
 import { useSubjectsStore } from '@/stores/subjects'
 import { useToastStore } from '@/stores/toast'
@@ -8,7 +9,8 @@ import { formatHours } from '@/utils/format'
 const store = useSubjectsStore()
 const toast = useToastStore()
 
-const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#8b5cf6', '#ec4899', '#84cc16', '#f97316', '#14b8a6']
+// Colores de tela de encuadernación: se leen bien de noche y de día
+const COLORS = ['#e0a458', '#7fb08f', '#7f9fd6', '#c98597', '#a98fd1', '#d4b65c', '#5fa9a4', '#d98466', '#9cb35f', '#8e98ab']
 
 const showArchived = ref(false)
 const visible = computed(() => store.subjects.filter((s) => showArchived.value || !s.archived))
@@ -73,25 +75,24 @@ async function remove(subject) {
         <h1>Materias</h1>
         <p>Lo que estás estudiando y cuántas horas quieres dedicarle por semana.</p>
       </div>
-      <div class="row">
+      <div class="row header-actions">
         <label v-if="archivedCount" class="check small">
           <input v-model="showArchived" type="checkbox" /> Ver archivadas ({{ archivedCount }})
         </label>
-        <button class="btn btn-primary" @click="open()">＋ Nueva materia</button>
+        <button class="btn btn-primary" @click="open()"><AppIcon name="plus" :size="16" /> Nueva materia</button>
       </div>
     </div>
 
     <div v-if="store.loaded && !visible.length" class="card empty">
-      <span class="emoji">📘</span>
       <h2>Aún no hay materias</h2>
-      <p>Por ejemplo: "Java", "Inglés", "Cálculo"…</p>
+      <p>Una materia es cualquier cosa que quieras estudiar: Java, Inglés, Cálculo…</p>
       <button class="btn btn-primary" @click="open()">Crear la primera</button>
     </div>
 
-    <div class="grid subjects">
-      <div v-for="s in visible" :key="s.id" class="card subject" :class="{ archived: s.archived }" :style="{ '--c': s.color }">
+    <div class="shelf">
+      <article v-for="s in visible" :key="s.id" class="card subject" :class="{ archived: s.archived }" :style="{ '--c': s.color }">
         <div class="subject-top">
-          <span class="avatar">{{ s.name.charAt(0).toUpperCase() }}</span>
+          <span class="avatar" aria-hidden="true">{{ s.name.charAt(0).toUpperCase() }}</span>
           <div class="subject-info">
             <h2>{{ s.name }}</h2>
             <span class="muted small">
@@ -101,12 +102,16 @@ async function remove(subject) {
           <span v-if="s.archived" class="tag">Archivada</span>
         </div>
         <div class="actions">
-          <button class="btn btn-sm" @click="open(s)">✏️ Editar</button>
-          <button class="btn btn-sm" @click="toggleArchive(s)">{{ s.archived ? '↩️ Restaurar' : '🗄️ Archivar' }}</button>
+          <button class="btn btn-sm" @click="open(s)"><AppIcon name="edit" :size="15" /> Editar</button>
+          <button class="btn btn-sm" @click="toggleArchive(s)">
+            <AppIcon :name="s.archived ? 'restore' : 'archive'" :size="15" /> {{ s.archived ? 'Restaurar' : 'Archivar' }}
+          </button>
           <span class="spacer" />
-          <button class="icon-btn" title="Eliminar" aria-label="Eliminar" @click="remove(s)">🗑️</button>
+          <button class="icon-btn danger" title="Eliminar" :aria-label="`Eliminar ${s.name}`" @click="remove(s)">
+            <AppIcon name="trash" />
+          </button>
         </div>
-      </div>
+      </article>
     </div>
 
     <BaseModal v-if="editing" :title="form.id ? 'Editar materia' : 'Nueva materia'" @close="editing = null">
@@ -116,19 +121,22 @@ async function remove(subject) {
           <input id="name" v-model="form.name" class="input" maxlength="60" required placeholder="Ej. Java Quarkus" autofocus />
         </div>
         <div class="field">
-          <label>Color</label>
-          <div class="colors">
+          <span id="color-label" class="label">Color</span>
+          <div class="colors" role="group" aria-labelledby="color-label">
             <button
               v-for="c in COLORS"
               :key="c"
               type="button"
               class="color"
               :class="{ selected: form.color === c }"
-              :style="{ background: c }"
+              :style="{ '--c': c }"
               :aria-label="`Color ${c}`"
+              :aria-pressed="form.color === c"
               @click="form.color = c"
             />
-            <input v-model="form.color" type="color" class="color-picker" title="Otro color" />
+            <label class="color-picker" title="Otro color">
+              <input v-model="form.color" type="color" aria-label="Elegir otro color" />
+            </label>
           </div>
         </div>
         <div class="field">
@@ -147,25 +155,44 @@ async function remove(subject) {
 </template>
 
 <style scoped>
-.subjects {
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+.header-actions {
+  gap: 14px;
 }
 
+.shelf {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 16px;
+}
+
+/* Cada materia es un libro: el color va en el lomo */
 .subject {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  border-top: 4px solid var(--c);
+  gap: 18px;
+  padding-left: 30px;
+  overflow: hidden;
+}
+
+.subject::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 9px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--c) 70%, #000), var(--c) 60%, color-mix(in srgb, var(--c) 80%, #fff));
+  box-shadow: 0 0 18px -2px color-mix(in srgb, var(--c) 60%, transparent);
 }
 
 .subject.archived {
-  opacity: 0.6;
+  opacity: 0.55;
 }
 
 .subject-top {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 
 .subject-info {
@@ -174,21 +201,23 @@ async function remove(subject) {
 }
 
 .subject-info h2 {
+  font-size: 1.3rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .avatar {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
   display: grid;
   place-items: center;
-  font-weight: 700;
-  font-size: 1.2rem;
-  color: #fff;
-  background: var(--c);
+  font-family: var(--serif);
+  font-size: 1.4rem;
+  color: var(--text);
+  background: color-mix(in srgb, var(--c) 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
   flex-shrink: 0;
 }
 
@@ -199,41 +228,52 @@ async function remove(subject) {
   flex-wrap: wrap;
 }
 
-.check {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
 .colors {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
 }
 
 .color {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
-  border: 3px solid transparent;
+  border: none;
+  background: var(--c);
   cursor: pointer;
-  box-shadow: 0 0 0 1px var(--border);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+  transition: box-shadow 0.18s, transform 0.12s;
+}
+
+.color:hover {
+  transform: scale(1.08);
 }
 
 .color.selected {
-  border-color: var(--surface);
-  box-shadow: 0 0 0 2px var(--text);
+  box-shadow: 0 0 0 3px var(--glass-strong), 0 0 0 5px var(--c), 0 0 16px var(--c);
 }
 
 .color-picker {
-  width: 34px;
+  position: relative;
+  width: 30px;
   height: 30px;
-  border: none;
-  background: none;
+  border-radius: 50%;
+  border: 1px dashed var(--border-strong);
+  background: conic-gradient(#e0a458, #7fb08f, #7f9fd6, #a98fd1, #c98597, #e0a458);
   cursor: pointer;
-  padding: 0;
+  overflow: hidden;
+}
+
+.color-picker:focus-within {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.color-picker input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 </style>

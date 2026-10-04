@@ -94,16 +94,19 @@ watch(
 
 <style scoped>
 .heatmap {
-  --cell: 12px;
   --gap: 3px;
+  container-type: inline-size;
 }
 
 .scroller {
   overflow-x: auto;
+  overflow-y: hidden;
   padding-bottom: 4px;
 }
 
 .inner {
+  /* Las celdas crecen para llenar el ancho del panel (entre 11 y 22 px) */
+  --cell: clamp(11px, calc((100cqi - 30px - (var(--weeks) - 1) * var(--gap)) / var(--weeks)), 22px);
   display: grid;
   grid-template-columns: 30px auto;
   grid-template-rows: auto auto;
@@ -116,9 +119,9 @@ watch(
   display: grid;
   grid-template-columns: repeat(var(--weeks), var(--cell));
   column-gap: var(--gap);
-  font-size: 0.72rem;
+  font-size: 0.74rem;
   color: var(--text-muted);
-  height: 18px;
+  height: 20px;
 }
 
 .months span {
@@ -148,7 +151,7 @@ watch(
 .cell {
   width: var(--cell);
   height: var(--cell);
-  border-radius: 3px;
+  border-radius: 2px;
   display: inline-block;
 }
 
@@ -160,20 +163,22 @@ watch(
   background: var(--heat-0);
 }
 
+/* Cada día con estudio es una ventana encendida: más minutos, más luz */
 .l1 {
-  background: color-mix(in srgb, var(--primary) 30%, var(--heat-0));
+  background: color-mix(in srgb, var(--primary) 28%, var(--heat-0));
 }
 
 .l2 {
-  background: color-mix(in srgb, var(--primary) 55%, var(--heat-0));
+  background: color-mix(in srgb, var(--primary) 52%, var(--heat-0));
 }
 
 .l3 {
-  background: color-mix(in srgb, var(--primary) 78%, var(--heat-0));
+  background: color-mix(in srgb, var(--primary) 76%, var(--heat-0));
 }
 
 .l4 {
   background: var(--primary);
+  box-shadow: 0 0 7px -1px var(--primary-glow);
 }
 
 .footer {

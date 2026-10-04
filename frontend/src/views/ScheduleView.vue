@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
+import AppIcon from '@/components/AppIcon.vue'
 import BaseModal from '@/components/BaseModal.vue'
 import { scheduleApi } from '@/api'
 import { useSubjectsStore } from '@/stores/subjects'
@@ -87,22 +88,27 @@ async function remove() {
     <div class="page-header">
       <div>
         <h1>Plan semanal</h1>
-        <p>Qué vas a estudiar cada día y por cuánto tiempo. Total planificado: <strong>{{ formatHours(weekTotal) }}</strong></p>
+        <p>Qué vas a estudiar cada día y por cuánto tiempo.</p>
+      </div>
+      <div class="week-total">
+        <span class="muted small">Total planificado</span>
+        <strong class="num">{{ formatHours(weekTotal) }}</strong>
       </div>
     </div>
 
     <div v-if="subjects.loaded && !subjects.active.length" class="card empty">
-      <span class="emoji">📘</span>
       <h2>Primero crea una materia</h2>
+      <p>El plan se arma con bloques de tus materias.</p>
       <RouterLink to="/subjects" class="btn btn-primary">Ir a materias</RouterLink>
     </div>
 
     <div v-else class="week">
-      <div v-for="day in DAYS" :key="day" class="day" :class="{ today: day === today }">
-        <div class="day-head">
-          <strong>{{ DAY_LABELS[day] }}</strong>
-          <span class="muted small">{{ dayTotal(day) ? formatMinutes(dayTotal(day)) : '—' }}</span>
-        </div>
+      <section v-for="day in DAYS" :key="day" class="day" :class="{ today: day === today }" :aria-label="DAY_LABELS[day]">
+        <header class="day-head">
+          <h2>{{ DAY_LABELS[day] }}</h2>
+          <span class="muted small num">{{ dayTotal(day) ? formatMinutes(dayTotal(day)) : 'Libre' }}</span>
+          <span v-if="day === today" class="today-tag">Hoy</span>
+        </header>
         <button
           v-for="b in byDay[day]"
           :key="b.id"
@@ -111,10 +117,15 @@ async function remove() {
           @click="open(day, b)"
         >
           <span class="block-name">{{ subjects.byId[b.subjectId]?.name }}</span>
-          <span class="block-meta">{{ b.startTime ? b.startTime + ' · ' : '' }}{{ formatMinutes(b.plannedMinutes) }}</span>
+          <span class="block-meta num">
+            <span v-if="b.startTime" class="block-time">{{ b.startTime }}</span>
+            {{ formatMinutes(b.plannedMinutes) }}
+          </span>
         </button>
-        <button class="add" @click="open(day)">＋ Agregar</button>
-      </div>
+        <button class="add" :aria-label="`Agregar bloque el ${DAY_LABELS[day]}`" @click="open(day)">
+          <AppIcon name="plus" :size="15" /> Agregar
+        </button>
+      </section>
     </div>
 
     <BaseModal v-if="editing" :title="form.id ? 'Editar bloque' : 'Nuevo bloque'" @close="editing = false">
@@ -140,8 +151,16 @@ async function remove() {
         <div class="field">
           <label for="b-min">Duración (minutos)</label>
           <input id="b-min" v-model.number="form.plannedMinutes" type="number" min="5" max="1440" step="5" class="input" required />
-          <div class="row">
-            <button v-for="m in [30, 45, 60, 90, 120]" :key="m" type="button" class="btn btn-sm" @click="form.plannedMinutes = m">
+          <div class="presets">
+            <button
+              v-for="m in [30, 45, 60, 90, 120]"
+              :key="m"
+              type="button"
+              class="btn btn-sm"
+              :class="{ chosen: form.plannedMinutes === m }"
+              :aria-pressed="form.plannedMinutes === m"
+              @click="form.plannedMinutes = m"
+            >
               {{ formatMinutes(m) }}
             </button>
           </div>
@@ -159,81 +178,149 @@ async function remove() {
 </template>
 
 <style scoped>
+.week-total {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.week-total strong {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 2rem;
+  line-height: 1.1;
+}
+
 .week {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 10px;
 }
 
+/* Cada día es un estante de vidrio */
 .day {
-  background: var(--surface);
+  position: relative;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(140%);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 12px 10px;
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 14px 10px 10px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  min-height: 220px;
+  min-height: 260px;
   min-width: 0;
 }
 
+/* Hoy, la lámpara alumbra este estante */
 .day.today {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 1px var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 50%, transparent);
+  background:
+    radial-gradient(ellipse 120% 60% at 50% 0%, var(--primary-soft), transparent 75%),
+    var(--glass);
+  box-shadow: var(--shadow), 0 0 40px -16px var(--primary-glow);
 }
 
 .day-head {
+  position: relative;
   display: flex;
   flex-direction: column;
-  padding: 0 2px 6px;
+  padding: 0 4px 10px;
   border-bottom: 1px solid var(--border);
+}
+
+.day-head h2 {
+  font-size: 1.08rem;
+}
+
+.today .day-head h2 {
+  color: var(--primary);
+}
+
+.today-tag {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--primary);
 }
 
 .block {
   text-align: left;
-  border: none;
+  border: 1px solid color-mix(in srgb, var(--c) 30%, transparent);
   border-left: 4px solid var(--c);
-  background: color-mix(in srgb, var(--c) 13%, var(--surface));
+  background: color-mix(in srgb, var(--c) 14%, transparent);
   color: var(--text);
-  border-radius: 8px;
-  padding: 8px 9px;
+  border-radius: 10px;
+  padding: 8px 10px;
   cursor: pointer;
   font: inherit;
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  transition: background 0.15s, box-shadow 0.2s;
 }
 
 .block:hover {
-  background: color-mix(in srgb, var(--c) 22%, var(--surface));
+  background: color-mix(in srgb, var(--c) 24%, transparent);
+  box-shadow: 0 0 18px -8px var(--c);
 }
 
 .block-name {
   font-weight: 600;
-  font-size: 0.88rem;
+  font-size: 0.89rem;
   overflow-wrap: anywhere;
 }
 
 .block-meta {
-  font-size: 0.78rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  font-size: 0.79rem;
   color: var(--text-muted);
+}
+
+.block-time {
+  color: var(--text);
 }
 
 .add {
   margin-top: auto;
-  border: 1px dashed var(--border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px dashed var(--border-strong);
   background: transparent;
   color: var(--text-muted);
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 7px;
   cursor: pointer;
   font: inherit;
   font-size: 0.85rem;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
 }
 
 .add:hover {
   border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.presets .chosen {
+  background: var(--primary-soft);
+  border-color: color-mix(in srgb, var(--primary) 50%, transparent);
   color: var(--primary);
 }
 
@@ -244,6 +331,12 @@ async function remove() {
 
   .day {
     min-height: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .week-total {
+    align-items: flex-start;
   }
 }
 </style>
