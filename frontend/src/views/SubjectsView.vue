@@ -4,13 +4,26 @@ import AppIcon from '@/components/AppIcon.vue'
 import BaseModal from '@/components/BaseModal.vue'
 import { useSubjectsStore } from '@/stores/subjects'
 import { useToastStore } from '@/stores/toast'
+import { confirmDialog } from '@/utils/confirm'
 import { formatHours } from '@/utils/format'
 
 const store = useSubjectsStore()
 const toast = useToastStore()
 
-// Colores de tela de encuadernación: se leen bien de noche y de día
-const COLORS = ['#e0a458', '#7fb08f', '#7f9fd6', '#c98597', '#a98fd1', '#d4b65c', '#5fa9a4', '#d98466', '#9cb35f', '#8e98ab']
+// Paleta de etiquetas: legible sobre el lienzo oscuro y sobre el claro
+const PALETTE = [
+  { value: '#5e6ad2', name: 'Lavanda' },
+  { value: '#4ea7fc', name: 'Azul' },
+  { value: '#26b5ce', name: 'Turquesa' },
+  { value: '#4cb782', name: 'Verde' },
+  { value: '#a3b745', name: 'Oliva' },
+  { value: '#f2c94c', name: 'Amarillo' },
+  { value: '#f2994a', name: 'Naranja' },
+  { value: '#eb5757', name: 'Rojo' },
+  { value: '#e86fb0', name: 'Rosa' },
+  { value: '#95a2b3', name: 'Gris' },
+]
+const COLORS = PALETTE.map((c) => c.value)
 
 const showArchived = ref(false)
 const visible = computed(() => store.subjects.filter((s) => showArchived.value || !s.archived))
@@ -54,10 +67,12 @@ async function toggleArchive(subject) {
 }
 
 async function remove(subject) {
-  const ok = confirm(
-    `¿Borrar "${subject.name}"?\n\nSe eliminarán también sus sesiones, su plan y sus metas. ` +
-      'Si solo quieres ocultarla, mejor archívala.',
-  )
+  const ok = await confirmDialog({
+    title: `¿Eliminar “${subject.name}”?`,
+    message: 'Se eliminarán también sus sesiones, su plan y sus metas. Si solo quieres ocultarla, archívala.',
+    confirmLabel: 'Eliminar materia',
+    danger: true,
+  })
   if (!ok) return
   try {
     await store.remove(subject.id)
@@ -77,78 +92,86 @@ async function remove(subject) {
       </div>
       <div class="row header-actions">
         <label v-if="archivedCount" class="check small">
-          <input v-model="showArchived" type="checkbox" /> Ver archivadas ({{ archivedCount }})
+          <input v-model="showArchived" type="checkbox" name="show-archived" /> Ver archivadas ({{ archivedCount }})
         </label>
-        <button class="btn btn-primary" @click="open()"><AppIcon name="plus" :size="16" /> Nueva materia</button>
+        <button class="btn btn-primary" type="button" @click="open()"><AppIcon name="plus" :size="14" /> Nueva materia</button>
       </div>
     </div>
 
     <div v-if="store.loaded && !visible.length" class="card empty">
+      <span class="empty-icon"><AppIcon name="subjects" :size="18" /></span>
       <h2>Aún no hay materias</h2>
       <p>Una materia es cualquier cosa que quieras estudiar: Java, Inglés, Cálculo…</p>
-      <button class="btn btn-primary" @click="open()">Crear la primera</button>
+      <button class="btn btn-primary" type="button" @click="open()">Crear la primera materia</button>
     </div>
 
-    <div class="shelf">
-      <article v-for="s in visible" :key="s.id" class="card subject" :class="{ archived: s.archived }" :style="{ '--c': s.color }">
-        <div class="subject-top">
-          <span class="avatar" aria-hidden="true">{{ s.name.charAt(0).toUpperCase() }}</span>
-          <div class="subject-info">
-            <h2>{{ s.name }}</h2>
-            <span class="muted small">
-              {{ s.weeklyGoalMinutes ? `Meta: ${formatHours(s.weeklyGoalMinutes)} por semana` : 'Sin meta semanal' }}
-            </span>
+    <section v-else-if="visible.length" class="card list" aria-label="Lista de materias">
+      <div class="list-head" aria-hidden="true">
+        <span>Materia</span>
+        <span>Meta semanal</span>
+        <span />
+      </div>
+      <ul>
+        <li v-for="s in visible" :key="s.id" class="subject" :class="{ archived: s.archived }">
+          <div class="subject-name">
+            <span class="swatch" :style="{ background: s.color }" aria-hidden="true" />
+            <span class="name">{{ s.name }}</span>
+            <span v-if="s.archived" class="tag">Archivada</span>
           </div>
-          <span v-if="s.archived" class="tag">Archivada</span>
-        </div>
-        <div class="actions">
-          <button class="btn btn-sm" @click="open(s)"><AppIcon name="edit" :size="15" /> Editar</button>
-          <button class="btn btn-sm" @click="toggleArchive(s)">
-            <AppIcon :name="s.archived ? 'restore' : 'archive'" :size="15" /> {{ s.archived ? 'Restaurar' : 'Archivar' }}
-          </button>
-          <span class="spacer" />
-          <button class="icon-btn danger" title="Eliminar" :aria-label="`Eliminar ${s.name}`" @click="remove(s)">
-            <AppIcon name="trash" />
-          </button>
-        </div>
-      </article>
-    </div>
+          <span class="goal num">
+            <span class="goal-label">Meta: </span>{{ s.weeklyGoalMinutes ? `${formatHours(s.weeklyGoalMinutes)} por semana` : 'Sin meta' }}
+          </span>
+          <div class="actions">
+            <button class="btn btn-ghost btn-sm" type="button" :aria-label="`Editar ${s.name}`" @click="open(s)">
+              <AppIcon name="edit" :size="14" /> Editar
+            </button>
+            <button class="btn btn-ghost btn-sm" type="button" :aria-label="`${s.archived ? 'Restaurar' : 'Archivar'} ${s.name}`" @click="toggleArchive(s)">
+              <AppIcon :name="s.archived ? 'restore' : 'archive'" :size="14" /> {{ s.archived ? 'Restaurar' : 'Archivar' }}
+            </button>
+            <button class="icon-btn danger" type="button" title="Eliminar" :aria-label="`Eliminar ${s.name}`" @click="remove(s)">
+              <AppIcon name="trash" />
+            </button>
+          </div>
+        </li>
+      </ul>
+    </section>
 
     <BaseModal v-if="editing" :title="form.id ? 'Editar materia' : 'Nueva materia'" @close="editing = null">
       <form id="subject-form" class="form" @submit.prevent="save">
         <div class="field">
           <label for="name">Nombre</label>
-          <input id="name" v-model="form.name" class="input" maxlength="60" required placeholder="Ej. Java Quarkus" autofocus />
+          <input id="name" v-model="form.name" name="subject-name" autocomplete="off" class="input" maxlength="60" required placeholder="Ej. Java Quarkus…" />
         </div>
         <div class="field">
           <span id="color-label" class="label">Color</span>
           <div class="colors" role="group" aria-labelledby="color-label">
             <button
-              v-for="c in COLORS"
-              :key="c"
+              v-for="c in PALETTE"
+              :key="c.value"
               type="button"
               class="color"
-              :class="{ selected: form.color === c }"
-              :style="{ '--c': c }"
-              :aria-label="`Color ${c}`"
-              :aria-pressed="form.color === c"
-              @click="form.color = c"
+              :class="{ selected: form.color === c.value }"
+              :style="{ '--c': c.value }"
+              :title="c.name"
+              :aria-label="c.name"
+              :aria-pressed="form.color === c.value"
+              @click="form.color = c.value"
             />
             <label class="color-picker" title="Otro color">
-              <input v-model="form.color" type="color" aria-label="Elegir otro color" />
+              <input v-model="form.color" type="color" name="custom-color" aria-label="Elegir otro color" />
             </label>
           </div>
         </div>
         <div class="field">
           <label for="goal">Meta semanal (horas)</label>
-          <input id="goal" v-model.number="form.weeklyGoalHours" type="number" min="0" max="168" step="0.5" class="input" />
+          <input id="goal" v-model.number="form.weeklyGoalHours" name="weekly-goal" type="number" inputmode="decimal" autocomplete="off" min="0" max="168" step="0.5" class="input num" />
           <span class="muted small">Déjala en 0 si no quieres meta para esta materia.</span>
         </div>
-        <p v-if="error" class="error-text">{{ error }}</p>
+        <p v-if="error" class="error-text" role="alert">{{ error }}</p>
       </form>
       <template #footer>
         <button class="btn" type="button" @click="editing = null">Cancelar</button>
-        <button class="btn btn-primary" type="submit" form="subject-form" :disabled="saving">Guardar</button>
+        <button class="btn btn-primary" type="submit" form="subject-form" :disabled="saving">{{ saving ? 'Guardando…' : 'Guardar materia' }}</button>
       </template>
     </BaseModal>
   </div>
@@ -159,114 +182,125 @@ async function remove(subject) {
   gap: 14px;
 }
 
-.shelf {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
-  gap: 16px;
-}
-
-/* Cada materia es un libro: el color va en el lomo */
-.subject {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  padding-left: 30px;
+.list {
+  padding: 0;
   overflow: hidden;
 }
 
-.subject::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 9px;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--c) 70%, #000), var(--c) 60%, color-mix(in srgb, var(--c) 80%, #fff));
-  box-shadow: 0 0 18px -2px color-mix(in srgb, var(--c) 60%, transparent);
+.list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.subject.archived {
-  opacity: 0.55;
+.list-head,
+.subject {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 15rem;
+  align-items: center;
+  gap: 16px;
+  padding: 0 12px 0 20px;
 }
 
-.subject-top {
+.list-head {
+  min-height: 36px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.4px;
+}
+
+.subject {
+  min-height: 52px;
+  border-bottom: 1px solid var(--border);
+  transition: background-color 0.15s var(--ease);
+}
+
+.subject:last-child {
+  border-bottom: none;
+}
+
+.subject:hover {
+  background: var(--surface-2);
+}
+
+.subject.archived .name,
+.subject.archived .goal {
+  color: var(--text-muted);
+}
+
+.subject-name {
   display: flex;
   align-items: center;
-  gap: 14px;
-}
-
-.subject-info {
-  flex: 1;
+  gap: 10px;
   min-width: 0;
 }
 
-.subject-info h2 {
-  font-size: 1.3rem;
+.swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.name {
+  font-weight: 500;
+  font-size: 0.9375rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.avatar {
-  width: 46px;
-  height: 46px;
-  border-radius: 13px;
-  display: grid;
-  place-items: center;
-  font-family: var(--serif);
-  font-size: 1.4rem;
-  color: var(--text);
-  background: color-mix(in srgb, var(--c) 22%, transparent);
-  border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
-  flex-shrink: 0;
+.goal {
+  color: var(--text-secondary);
+}
+
+.goal-label {
+  display: none;
 }
 
 .actions {
   display: flex;
   align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 2px;
 }
 
 .colors {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
 }
 
 .color {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
   border: none;
   background: var(--c);
   cursor: pointer;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
-  transition: box-shadow 0.18s, transform 0.12s;
-}
-
-.color:hover {
-  transform: scale(1.08);
+  transition: box-shadow 0.15s var(--ease);
 }
 
 .color.selected {
-  box-shadow: 0 0 0 3px var(--glass-strong), 0 0 0 5px var(--c), 0 0 16px var(--c);
+  box-shadow: 0 0 0 2px var(--surface-2), 0 0 0 4px var(--c);
 }
 
 .color-picker {
   position: relative;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  border: 1px dashed var(--border-strong);
-  background: conic-gradient(#e0a458, #7fb08f, #7f9fd6, #a98fd1, #c98597, #e0a458);
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--border-tertiary);
+  background: conic-gradient(#eb5757, #f2c94c, #4cb782, #4ea7fc, #5e6ad2, #e86fb0, #eb5757);
   cursor: pointer;
   overflow: hidden;
 }
 
 .color-picker:focus-within {
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -275,5 +309,47 @@ async function remove(subject) {
   inset: 0;
   opacity: 0;
   cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .list-head {
+    display: none;
+  }
+
+  .subject {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'name actions'
+      'goal actions';
+    row-gap: 2px;
+    padding: 10px 8px 10px 16px;
+  }
+
+  .subject-name {
+    grid-area: name;
+  }
+
+  .goal {
+    grid-area: goal;
+    padding-left: 20px;
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+  }
+
+  .goal-label {
+    display: inline;
+  }
+
+  .actions {
+    grid-area: actions;
+  }
+
+  /* En móvil, las acciones de texto se quedan solo con su icono */
+  .actions .btn {
+    font-size: 0;
+    gap: 0;
+    width: 40px;
+    padding: 0;
+  }
 }
 </style>

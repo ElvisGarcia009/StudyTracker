@@ -1,18 +1,27 @@
 <script setup>
+import AppIcon from '@/components/AppIcon.vue'
 import { useToastStore } from '@/stores/toast'
 
 const toast = useToastStore()
+
+// Iconos de línea por tipo (el store trae glifos y emojis; aquí no se usan)
+const ICONS = { success: 'check-circle', error: 'alert', achievement: 'goals', info: 'bell' }
 </script>
 
 <template>
-  <div class="toast-host" aria-live="polite">
+  <div class="toast-host">
     <TransitionGroup name="toast">
-      <div v-for="t in toast.toasts" :key="t.id" class="toast" :class="t.type" @click="toast.dismiss(t.id)">
-        <span class="toast-icon">{{ t.icon }}</span>
+      <div v-for="t in toast.toasts" :key="t.id" class="toast" :class="t.type" :role="t.type === 'error' ? 'alert' : 'status'">
+        <span class="toast-icon">
+          <AppIcon :name="ICONS[t.type] || 'bell'" :size="16" />
+        </span>
         <div class="toast-text">
           <strong>{{ t.title }}</strong>
           <p v-if="t.message">{{ t.message }}</p>
         </div>
+        <button class="icon-btn close" type="button" aria-label="Cerrar aviso" @click="toast.dismiss(t.id)">
+          <AppIcon name="close" :size="14" />
+        </button>
       </div>
     </TransitionGroup>
   </div>
@@ -22,27 +31,24 @@ const toast = useToastStore()
 .toast-host {
   position: fixed;
   right: 16px;
-  bottom: 16px;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 100;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  z-index: 100;
-  max-width: min(380px, calc(100vw - 32px));
+  gap: 8px;
+  width: min(360px, calc(100vw - 32px));
 }
 
 .toast {
-  --c: var(--primary);
+  --c: var(--text-muted);
   display: flex;
-  gap: 12px;
+  gap: 10px;
   align-items: flex-start;
-  padding: 13px 16px 13px 14px;
-  background: var(--glass-strong);
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
+  padding: 12px 8px 12px 14px;
+  background: var(--surface-2);
   border: 1px solid var(--border-strong);
-  border-radius: 16px;
-  box-shadow: var(--shadow-lg);
-  cursor: pointer;
+  border-radius: var(--radius-lg);
+  box-shadow: inset 0 1px 0 var(--highlight), var(--shadow-pop);
 }
 
 .toast.success {
@@ -53,49 +59,50 @@ const toast = useToastStore()
   --c: var(--danger);
 }
 
+.toast.achievement {
+  --c: var(--primary-text);
+}
+
 .toast-icon {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  flex-shrink: 0;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--c) 16%, transparent);
+  padding-top: 1px;
   color: var(--c);
-  font-weight: 700;
-  font-size: 0.95rem;
-}
-
-/* Un logro llega con la luz de la lámpara */
-.toast.achievement {
-  border-color: color-mix(in srgb, var(--primary) 45%, transparent);
-  box-shadow: var(--shadow-lg), 0 0 40px -12px var(--primary-glow);
-}
-
-.toast.achievement .toast-icon {
-  width: 36px;
-  height: 36px;
-  font-size: 1.3rem;
+  flex-shrink: 0;
 }
 
 .toast-text {
+  flex: 1;
   min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.toast-text strong {
+  font-weight: 500;
 }
 
 .toast p {
   margin-top: 2px;
   color: var(--text-muted);
-  font-size: 0.88rem;
+  font-size: 0.8125rem;
+}
+
+.close {
+  width: 26px;
+  height: 26px;
+  margin-top: -3px;
 }
 
 .toast-enter-from,
 .toast-leave-to {
   opacity: 0;
-  transform: translateY(12px);
+  transform: translateY(8px);
 }
 
 .toast-enter-active,
 .toast-leave-active {
-  transition: all 0.25s ease;
+  transition:
+    opacity 0.2s var(--ease),
+    transform 0.2s var(--ease);
 }
 </style>

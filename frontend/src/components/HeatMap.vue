@@ -7,7 +7,14 @@ const props = defineProps({
   days: { type: Array, required: true }, // [{ date: '2026-10-02', minutes: 45 }]
 })
 
-const MONTHS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+// Nombres cortos de mes y día desde Intl, sin el punto final ("oct." → "Oct")
+const short = (opts, date) => {
+  const text = new Intl.DateTimeFormat('es', opts).format(date).replace('.', '')
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
+const MONTHS = Array.from({ length: 12 }, (_, m) => short({ month: 'short' }, new Date(2026, m, 1)).slice(0, 3))
+// 5 de enero de 2026 fue lunes
+const WEEKDAYS = Array.from({ length: 7 }, (_, d) => short({ weekday: 'short' }, new Date(2026, 0, 5 + d)))
 
 function level(minutes) {
   if (!minutes) return 0
@@ -47,6 +54,11 @@ const monthLabels = computed(() => {
 })
 
 const totalDays = computed(() => props.days.filter((d) => d.minutes > 0).length)
+const totalMinutes = computed(() => props.days.reduce((sum, d) => sum + (d.minutes || 0), 0))
+const summary = computed(
+  () =>
+    `Actividad del último año: ${totalDays.value} ${totalDays.value === 1 ? 'día' : 'días'} con estudio, ${formatMinutes(totalMinutes.value)} en total`,
+)
 
 // Al cargar, desplaza el scroll al final para ver las semanas más recientes
 const scroller = ref(null)
@@ -62,15 +74,15 @@ watch(
 
 <template>
   <div class="heatmap">
-    <div ref="scroller" class="scroller">
-      <div class="inner" :style="{ '--weeks': weekCount }">
-        <div class="months">
+    <div ref="scroller" class="scroller" tabindex="0" aria-label="Mapa de actividad, desplazable">
+      <div class="inner" role="img" :aria-label="summary" :style="{ '--weeks': weekCount }">
+        <div class="months" aria-hidden="true">
           <span v-for="m in monthLabels" :key="m.week" :style="{ gridColumn: m.week + 1 }">{{ m.text }}</span>
         </div>
-        <div class="weekdays">
-          <span>Lun</span><span /><span>Mié</span><span /><span>Vie</span><span /><span />
+        <div class="weekdays" aria-hidden="true">
+          <span>{{ WEEKDAYS[0] }}</span><span /><span>{{ WEEKDAYS[2] }}</span><span /><span>{{ WEEKDAYS[4] }}</span><span /><span />
         </div>
-        <div class="grid">
+        <div class="grid" aria-hidden="true">
           <div
             v-for="c in cells"
             :key="c.key"
@@ -82,8 +94,8 @@ watch(
       </div>
     </div>
     <div class="footer">
-      <span class="muted small">{{ totalDays }} días con estudio en el último año</span>
-      <span class="legend small muted">
+      <span class="muted small num">{{ totalDays }} {{ totalDays === 1 ? 'día' : 'días' }} con estudio en el último año</span>
+      <span class="legend small muted" aria-hidden="true">
         Menos
         <i class="cell l0" /><i class="cell l1" /><i class="cell l2" /><i class="cell l3" /><i class="cell l4" />
         Más
@@ -102,11 +114,12 @@ watch(
   overflow-x: auto;
   overflow-y: hidden;
   padding-bottom: 4px;
+  border-radius: var(--radius-xs);
 }
 
 .inner {
-  /* Las celdas crecen para llenar el ancho del panel (entre 11 y 22 px) */
-  --cell: clamp(11px, calc((100cqi - 30px - (var(--weeks) - 1) * var(--gap)) / var(--weeks)), 22px);
+  /* Las celdas crecen para llenar el ancho del panel (entre 10 y 18 px) */
+  --cell: clamp(10px, calc((100cqi - 30px - (var(--weeks) - 1) * var(--gap)) / var(--weeks)), 18px);
   display: grid;
   grid-template-columns: 30px auto;
   grid-template-rows: auto auto;
@@ -119,7 +132,7 @@ watch(
   display: grid;
   grid-template-columns: repeat(var(--weeks), var(--cell));
   column-gap: var(--gap);
-  font-size: 0.74rem;
+  font-size: 0.75rem;
   color: var(--text-muted);
   height: 20px;
 }
@@ -133,7 +146,7 @@ watch(
   display: grid;
   grid-template-rows: repeat(7, var(--cell));
   row-gap: var(--gap);
-  font-size: 0.68rem;
+  font-size: 0.6875rem;
   color: var(--text-muted);
   line-height: var(--cell);
 }
@@ -151,7 +164,7 @@ watch(
 .cell {
   width: var(--cell);
   height: var(--cell);
-  border-radius: 2px;
+  border-radius: 3px;
   display: inline-block;
 }
 
@@ -163,22 +176,24 @@ watch(
   background: var(--heat-0);
 }
 
-/* Cada día con estudio es una ventana encendida: más minutos, más luz */
 .l1 {
-  background: color-mix(in srgb, var(--primary) 28%, var(--heat-0));
+  background: color-mix(in srgb, var(--primary) 30%, var(--heat-0));
 }
 
 .l2 {
-  background: color-mix(in srgb, var(--primary) 52%, var(--heat-0));
+  background: color-mix(in srgb, var(--primary) 55%, var(--heat-0));
 }
 
 .l3 {
-  background: color-mix(in srgb, var(--primary) 76%, var(--heat-0));
+  background: color-mix(in srgb, var(--primary) 78%, var(--heat-0));
 }
 
 .l4 {
+  background: var(--primary-hover);
+}
+
+[data-theme='light'] .l4 {
   background: var(--primary);
-  box-shadow: 0 0 7px -1px var(--primary-glow);
 }
 
 .footer {
@@ -187,7 +202,7 @@ watch(
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
 .legend {
@@ -197,7 +212,7 @@ watch(
 }
 
 .legend .cell {
-  width: 11px;
-  height: 11px;
+  width: 10px;
+  height: 10px;
 }
 </style>
